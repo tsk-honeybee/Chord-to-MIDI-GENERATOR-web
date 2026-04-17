@@ -1,4 +1,4 @@
-const SAMPLE_URL = "/audio/piano-c3.ogg";
+const SAMPLE_URL = `${import.meta.env.BASE_URL}audio/piano-c3.ogg`;
 const SAMPLE_ROOT_MIDI = 60;
 const PREVIEW_ATTACK_SEC = 0.006;
 const PREVIEW_RELEASE_SEC = 0.12;
@@ -6,13 +6,13 @@ const PREVIEW_MAX_NOTE_SEC = 2.8;
 const PREVIEW_STAGGER_SEC = 0.01;
 const PREVIEW_LOOP_START_SEC = 0.72;
 const PREVIEW_LOOP_END_OFFSET_SEC = 0.28;
+const PREVIEW_CLEANUP_DELAY_MS = Math.ceil((PREVIEW_RELEASE_SEC + 0.04) * 1000);
 
 let audioContext: AudioContext | null = null;
 let sampleBufferPromise: Promise<AudioBuffer> | null = null;
 let activeNodes: AudioNode[] = [];
 let activeSources: AudioBufferSourceNode[] = [];
 let activeMasterGain: GainNode | null = null;
-let stopTimeoutId: number | null = null;
 
 function getAudioContextCtor(): typeof AudioContext | null {
   if (typeof window === "undefined") {
@@ -147,11 +147,6 @@ async function startPreviewPlayback(
   const sampleBuffer = await loadSampleBuffer(context);
   stopChordPreview();
 
-  if (stopTimeoutId) {
-    window.clearTimeout(stopTimeoutId);
-    stopTimeoutId = null;
-  }
-
   const masterGain = context.createGain();
   const masterFilter = context.createBiquadFilter();
   const compressor = context.createDynamicsCompressor();
@@ -208,11 +203,6 @@ export async function startHeldChordPreview(midiNotes: number[], volume = 0.72):
 }
 
 export function stopChordPreview(): void {
-  if (stopTimeoutId) {
-    window.clearTimeout(stopTimeoutId);
-    stopTimeoutId = null;
-  }
-
   if (activeMasterGain && audioContext) {
     const now = audioContext.currentTime;
     activeMasterGain.gain.cancelScheduledValues(now);
@@ -226,7 +216,7 @@ export function stopChordPreview(): void {
   activeNodes = [];
   activeMasterGain = null;
 
-  stopTimeoutId = window.setTimeout(() => {
+  window.setTimeout(() => {
     sourcesToStop.forEach((source) => {
       try {
         source.stop();
@@ -242,7 +232,5 @@ export function stopChordPreview(): void {
         // Ignore nodes that are already disconnected.
       }
     });
-
-    stopTimeoutId = null;
-  }, Math.ceil((PREVIEW_RELEASE_SEC + 0.04) * 1000));
+  }, PREVIEW_CLEANUP_DELAY_MS);
 }

@@ -23,7 +23,7 @@ export default defineConfig({
         start_url: base
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,png,svg,ico,json}"],
+        globPatterns: ["**/*.{js,css,html,png,svg,ico,json,ogg,mp3,wav}"],
         cleanupOutdatedCaches: true
       }
     })
