@@ -7,6 +7,7 @@ import {
   useState,
   type CSSProperties,
   type ChangeEvent,
+  type FocusEvent as ReactFocusEvent,
 } from "react";
 import {
   countChordTokens,
@@ -14,9 +15,11 @@ import {
   createDefaultParts,
   createPart,
   formatChartText,
+  hasAmbiguousChartText,
   parseChartText,
   rowsToParts,
   serializeChart,
+  type ChartTextFormat,
   type ChartPart,
 } from "./lib/chart";
 import {
@@ -45,12 +48,25 @@ interface PersistedState {
   mode: NotationMode;
   parts: ChartPart[];
   settings: ExportSettings;
+  chartFormat?: ChartTextFormat;
 }
 
 interface BuilderState {
   root: string;
   quality: string;
   tensions: string[];
+}
+
+interface DialogAction {
+  label: string;
+  variant?: "primary" | "ghost";
+  onClick: () => void;
+}
+
+interface AppDialogState {
+  title: string;
+  message: string;
+  actions: DialogAction[];
 }
 
 interface PreviewRow {
@@ -73,6 +89,10 @@ interface ExportSettings {
 
 const STORAGE_KEY = "chord-to-midi-generator-pwa";
 const UI_SCALE_STORAGE_KEY = "chord-to-midi-generator-ui-scale";
+const CHART_FORMAT_OPTIONS: { value: ChartTextFormat; label: string }[] = [
+  { value: "generic", label: "범용" },
+  { value: "chordwiki", label: "ChordWiki" },
+];
 const CHART_PLACEHOLDER = `[intro] (Key:C)
 | FM7 | G7 | Em7 | Am7 |
 | FM7 | G7 | Am7 | % |
@@ -80,6 +100,15 @@ const CHART_PLACEHOLDER = `[intro] (Key:C)
 [A] (Key:Eb)
 | Eb | % | AbM7 | Abm7 |
 | Eb | Eb Eb/Ab | AbM7 | Abm7 |`;
+const CHORDWIKI_PLACEHOLDER = `Key: Bb
+
+[Key. & Drums. only] (Key:Bb)
+
+| (Bb) > N.C. --- ----ちょっとだけ| こわい | (Bb) > N.C. --- ----の| ---- ---- |
+
+[All in] (Key:Bb)
+
+| BbなんF/Aとなく| Gm知っGm7/Fてる け| Ebadd9どBb/D自信(じし| Cm7ん)がF7ない| (↓)よ`;
 const HELP_BASICS = [
   "마디 칸을 클릭 한 뒤 텍스트로 코드를 적을 수 있습니다. 각 코드는 공백으로 구분됩니다. 예: C G/B Am7 F",
   "**슬래시(/)** 는 베이스음을 지정합니다. 예: C/E 는 C 코드에 베이스 E입니다.",
@@ -321,6 +350,7 @@ function normalizePersistedState(): PersistedState {
       mode: "alphabet",
       parts: createDefaultParts(),
       settings: DEFAULT_SETTINGS,
+      chartFormat: "generic",
     };
   }
 
@@ -331,6 +361,7 @@ function normalizePersistedState(): PersistedState {
         mode: "alphabet",
         parts: createDefaultParts(),
         settings: DEFAULT_SETTINGS,
+        chartFormat: "generic",
       };
     }
 
@@ -354,25 +385,27 @@ function normalizePersistedState(): PersistedState {
         previewEnabled: parsed.settings?.previewEnabled ?? DEFAULT_SETTINGS.previewEnabled,
         previewVolume: parsed.settings?.previewVolume ?? DEFAULT_SETTINGS.previewVolume,
       },
+      chartFormat: parsed.chartFormat === "chordwiki" ? "chordwiki" : "generic",
     };
   } catch {
     return {
       mode: "alphabet",
       parts: createDefaultParts(),
       settings: DEFAULT_SETTINGS,
+      chartFormat: "generic",
     };
   }
 }
 
 function ChartTextarea({
   value,
-  onChange,
+  onValueChange,
   onBlur,
   placeholder,
 }: {
   value: string;
-  onChange: React.ChangeEventHandler<HTMLTextAreaElement>;
-  onBlur: React.FocusEventHandler<HTMLTextAreaElement>;
+  onValueChange: (value: string) => void;
+  onBlur: () => void;
   placeholder: string;
 }) {
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -405,8 +438,8 @@ function ChartTextarea({
       <textarea
         className="syntax-textarea chart-textarea"
         value={value}
-        onChange={onChange}
-        onBlur={onBlur}
+        onChange={(event) => onValueChange(event.target.value)}
+        onBlur={() => onBlur()}
         onScroll={handleScroll}
         placeholder={placeholder}
         spellCheck={false}
@@ -555,7 +588,10 @@ function App() {
   const [mode, setMode] = useState<NotationMode>(persisted.mode);
   const [parts, setParts] = useState<ChartPart[]>(persisted.parts);
   const [settings, setSettings] = useState<ExportSettings>(persisted.settings);
-  const [chartDraft, setChartDraft] = useState<string>(serializeChart(persisted.parts));
+  const [chartFormat, setChartFormat] = useState<ChartTextFormat>(persisted.chartFormat ?? "generic");
+  const [chartDraft, setChartDraft] = useState<string>(
+    serializeChart(persisted.parts, persisted.chartFormat ?? "generic"),
+  );
   const [autoFormatChart, setAutoFormatChart] = useState(false);
   const [chartSource, setChartSource] = useState<"grid" | "text">("grid");
   const [selectedMeasure, setSelectedMeasure] = useState({
@@ -572,6 +608,7 @@ function App() {
   const [measureSteps, setMeasureSteps] = useState<Record<string, number>>({});
   const [toast, setToast] = useState<string | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [dialogState, setDialogState] = useState<AppDialogState | null>(null);
   const [isUpdateReady, setIsUpdateReady] = useState(false);
   const [isApplyingUpdate, setIsApplyingUpdate] = useState(false);
   const [manualScale, setManualScale] = useState<number>(() => {
@@ -620,9 +657,10 @@ function App() {
         mode,
         parts,
         settings,
+        chartFormat,
       }),
     );
-  }, [mode, parts, settings]);
+  }, [mode, parts, settings, chartFormat]);
 
   useEffect(() => {
     window.localStorage.setItem(UI_SCALE_STORAGE_KEY, String(manualScale));
@@ -630,10 +668,10 @@ function App() {
 
   useEffect(() => {
     if (chartSource === "grid") {
-      const serialized = serializeChart(parts);
+      const serialized = serializeChart(parts, chartFormat);
       setChartDraft(autoFormatChart ? formatChartText(serialized) : serialized);
     }
-  }, [parts, chartSource, autoFormatChart]);
+  }, [parts, chartSource, autoFormatChart, chartFormat]);
 
   useEffect(() => {
     if (settings.previewEnabled) {
@@ -650,12 +688,17 @@ function App() {
   }, [settings.previewEnabled]);
 
   useEffect(() => {
-    if (!isHelpOpen) {
+    if (!isHelpOpen && !dialogState) {
       return;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (dialogState) {
+          setDialogState(null);
+          return;
+        }
+
         setIsHelpOpen(false);
       }
     };
@@ -668,7 +711,7 @@ function App() {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isHelpOpen]);
+  }, [dialogState, isHelpOpen]);
 
   useEffect(() => {
     return subscribeToPwaRefresh(() => {
@@ -899,19 +942,47 @@ function App() {
   };
 
   const handleApplyChart = () => {
-    const rows = parseChartText(chartDraft);
-    if (rows.length === 0) {
-      showToast("차트 텍스트에서 마디를 찾지 못했습니다.");
+    const applyRows = () => {
+      const rows = parseChartText(chartDraft, chartFormat);
+      if (rows.length === 0) {
+        showToast("차트 텍스트에서 마디를 찾지 못했습니다.");
+        return;
+      }
+
+      const nextParts = rowsToParts(rows);
+      startTransition(() => {
+        setParts(nextParts);
+        setChartSource("grid");
+        setSelectedMeasure({ partId: nextParts[0]?.id ?? "", measureIndex: 0 });
+      });
+      showToast("텍스트 차트를 적용했습니다.");
+    };
+
+    if (hasAmbiguousChartText(chartDraft, chartFormat)) {
+      setDialogState({
+        title: "마디 구분 불명확",
+        message:
+          "마디 구분이 명확하지 않은 부분을 발견 하였습니다.\n(ChordWiki의 문서 작성 방식 특성상 이러한 문제가 발생할 수 있습니다.)\n결과물에 오차가 발생할 수 있습니다.",
+        actions: [
+          {
+            label: "취소",
+            variant: "ghost",
+            onClick: () => setDialogState(null),
+          },
+          {
+            label: "계속",
+            variant: "primary",
+            onClick: () => {
+              setDialogState(null);
+              applyRows();
+            },
+          },
+        ],
+      });
       return;
     }
 
-    const nextParts = rowsToParts(rows);
-    startTransition(() => {
-      setParts(nextParts);
-      setChartSource("grid");
-      setSelectedMeasure({ partId: nextParts[0]?.id ?? "", measureIndex: 0 });
-    });
-    showToast("텍스트 차트를 적용했습니다.");
+    applyRows();
   };
 
   const handleChartImport = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -1191,89 +1262,93 @@ function App() {
             <div className="editor-toolbar">
               <div className="editor-toolbar__stack">
                 <div className="editor-toolbar__main">
-                  <label className="field field--compact field--segmented">
-                    <span>전환</span>
-                    <div className="segmented">
-                      <button
-                        className={mode === "alphabet" ? "is-active" : ""}
-                        onClick={() => handleModeChange("alphabet")}
+                  <div className="editor-toolbar__primary-controls">
+                    <label className="field field--compact field--segmented">
+                      <span>전환</span>
+                      <div className="segmented">
+                        <button
+                          className={mode === "alphabet" ? "is-active" : ""}
+                          onClick={() => handleModeChange("alphabet")}
+                        >
+                          알파벳
+                        </button>
+                        <button
+                          className={mode === "degree" ? "is-active" : ""}
+                          onClick={() => handleModeChange("degree")}
+                        >
+                          로마자
+                        </button>
+                      </div>
+                    </label>
+
+                    <label className="field field--compact field--octave">
+                      <span>옥타브</span>
+                      <select
+                        value={settings.voicingOctaveShift}
+                        onChange={(event) =>
+                          setSettings((current) => ({
+                            ...current,
+                            voicingOctaveShift: Number(event.target.value),
+                          }))
+                        }
                       >
-                        알파벳
-                      </button>
-                      <button
-                        className={mode === "degree" ? "is-active" : ""}
-                        onClick={() => handleModeChange("degree")}
+                        {[2, 1, 0, -1, -2].map((shift) => (
+                          <option key={shift} value={shift}>
+                            {shift > 0 ? `+${shift}` : shift}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="field field--compact">
+                      <span>보이싱</span>
+                      <select
+                        value={settings.voicingStyle}
+                        onChange={(event) =>
+                          setSettings((current) => ({
+                            ...current,
+                            voicingStyle: event.target.value as VoicingStyle,
+                          }))
+                        }
                       >
-                        로마자
-                      </button>
-                    </div>
-                  </label>
+                        {VOICING_STYLES.map((style) => (
+                          <option key={style} value={style}>
+                            {style}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
 
-                  <label className="field field--compact">
-                    <span>보이싱</span>
-                    <select
-                      value={settings.voicingStyle}
-                      onChange={(event) =>
-                        setSettings((current) => ({
-                          ...current,
-                          voicingStyle: event.target.value as VoicingStyle,
-                        }))
-                      }
-                    >
-                      {VOICING_STYLES.map((style) => (
-                        <option key={style} value={style}>
-                          {style}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <div className="editor-toolbar__option-toggles">
+                    <label className="toggle toggle--compact">
+                      <input
+                        type="checkbox"
+                        checked={settings.omit5OnConflict}
+                        onChange={(event) =>
+                          setSettings((current) => ({
+                            ...current,
+                            omit5OnConflict: event.target.checked,
+                          }))
+                        }
+                      />
+                      <span>충돌 시 5음 생략</span>
+                    </label>
 
-                  <label className="toggle toggle--compact">
-                    <input
-                      type="checkbox"
-                      checked={settings.omit5OnConflict}
-                      onChange={(event) =>
-                        setSettings((current) => ({
-                          ...current,
-                          omit5OnConflict: event.target.checked,
-                        }))
-                      }
-                    />
-                    <span>충돌 시 5음 생략</span>
-                  </label>
-
-                  <label className="toggle toggle--compact">
-                    <input
-                      type="checkbox"
-                      checked={settings.omitDuplicatedBass}
-                      onChange={(event) =>
-                        setSettings((current) => ({
-                          ...current,
-                          omitDuplicatedBass: event.target.checked,
-                        }))
-                      }
-                    />
-                    <span>중복 베이스 정리</span>
-                  </label>
-
-                  <label className="field field--compact field--octave">
-                    <span>옥타브</span>
-                    <select
-                      value={settings.voicingOctaveShift}
-                      onChange={(event) =>
-                        setSettings((current) => ({
-                          ...current,
-                          voicingOctaveShift: Number(event.target.value),
-                        }))
-                      }
-                    >
-                      {[-2, -1, 0, 1, 2].map((shift) => (
-                        <option key={shift} value={shift}>
-                          {shift > 0 ? `+${shift}` : shift}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    <label className="toggle toggle--compact">
+                      <input
+                        type="checkbox"
+                        checked={settings.omitDuplicatedBass}
+                        onChange={(event) =>
+                          setSettings((current) => ({
+                            ...current,
+                            omitDuplicatedBass: event.target.checked,
+                          }))
+                        }
+                      />
+                      <span>중복 베이스 정리</span>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="editor-toolbar__secondary">
@@ -1655,10 +1730,48 @@ function App() {
 
           <section className="panel">
             <div className="panel__header panel__header--chart">
-              <div>
-                <span className="panel__eyebrow">텍스트 차트</span>
+              <div className="chart-panel__header-main">
+                <div>
+                  <span className="panel__eyebrow">텍스트 차트</span>
+                </div>
+                <button className="button button--primary" onClick={handleApplyChart}>
+                  텍스트 적용
+                </button>
               </div>
-              <div className="panel__actions" style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+              <div className="panel__actions chart-panel__controls">
+                <div className="segmented" role="tablist" aria-label="텍스트 차트 포맷">
+                  {CHART_FORMAT_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={chartFormat === option.value ? "is-active" : ""}
+                      onClick={() => {
+                        if (option.value === "chordwiki" && chartFormat !== "chordwiki") {
+                          setDialogState({
+                            title: "ChordWiki 실험 기능",
+                            message: "해당 기능은 아직 코드 해석이 불완전한 실험 단계입니다.",
+                            actions: [
+                              {
+                                label: "확인",
+                                variant: "primary",
+                                onClick: () => {
+                                  setDialogState(null);
+                                  setChartFormat(option.value);
+                                  setChartSource("grid");
+                                },
+                              },
+                            ],
+                          });
+                          return;
+                        }
+                        setChartFormat(option.value);
+                        setChartSource("grid");
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
                 <label className="toggle-switch">
                   <input
                     type="checkbox"
@@ -1674,18 +1787,15 @@ function App() {
                   <span className="toggle-switch__slider"></span>
                   <span className="toggle-switch__label">자동 줄맞춤</span>
                 </label>
-                <button className="button button--primary" onClick={handleApplyChart}>
-                  텍스트 적용
-                </button>
               </div>
             </div>
 
             <ChartTextarea
               value={chartDraft}
-              placeholder={CHART_PLACEHOLDER}
-              onChange={(event) => {
+              placeholder={chartFormat === "chordwiki" ? CHORDWIKI_PLACEHOLDER : CHART_PLACEHOLDER}
+              onValueChange={(nextValue) => {
                 setChartSource("text");
-                setChartDraft(event.target.value);
+                setChartDraft(nextValue);
               }}
               onBlur={() => {
                 if (autoFormatChart) {
@@ -1769,8 +1879,41 @@ function App() {
         </div>
       ) : null}
 
+      {dialogState ? (
+        <div className="help-overlay" onClick={() => setDialogState(null)}>
+          <div
+            className="help-dialog help-dialog--confirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="app-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="help-dialog__header">
+              <div>
+                <span className="panel__eyebrow">안내</span>
+                <h2 id="app-dialog-title">{dialogState.title}</h2>
+              </div>
+            </div>
+            <div className="help-dialog__content">
+              <p className="dialog-message">{dialogState.message}</p>
+            </div>
+            <div className="dialog-actions">
+              {dialogState.actions.map((action) => (
+                <button
+                  key={action.label}
+                  className={action.variant === "primary" ? "button button--primary" : "button button--ghost"}
+                  onClick={action.onClick}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="app-version" aria-label="앱 버전">
-        © TSK · v1.0.9
+        © TSK · v1.1.0
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}
