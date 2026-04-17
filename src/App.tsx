@@ -657,6 +657,20 @@ function GridDropdown({
   );
 }
 
+function getPartTitleFontSize(value: string): string {
+  const length = Array.from(value.trim()).length;
+  if (length >= 18) {
+    return "0.74rem";
+  }
+  if (length >= 14) {
+    return "0.82rem";
+  }
+  if (length >= 11) {
+    return "0.9rem";
+  }
+  return "1.04rem";
+}
+
 function App() {
   const persisted = normalizePersistedState();
   const [mode, setMode] = useState<NotationMode>(persisted.mode);
@@ -1503,6 +1517,7 @@ function App() {
                       <input
                         className="part-title-input"
                         value={partNameDrafts[part.id] ?? part.part}
+                        style={{ fontSize: getPartTitleFontSize(partNameDrafts[part.id] ?? part.part) }}
                         onChange={(event) => handlePartNameChange(part.id, event.target.value)}
                         onCompositionStart={() =>
                           setPartNameComposing((current) => ({
@@ -1981,7 +1996,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-        © TSK · v1.1.1
+        © TSK · v1.1.2
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}

@@ -653,9 +653,10 @@ button:disabled::before {
 }
 
 .part-title-input {
-  flex: 1 1 180px;
+  flex: 0 1 176px;
   min-width: 96px;
-  width: auto;
+  width: min(100%, 176px);
+  max-width: 176px;
   margin-top: 20px;
   min-height: 32px;
   height: 32px;
