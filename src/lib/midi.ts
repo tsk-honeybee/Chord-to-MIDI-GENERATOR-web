@@ -56,28 +56,44 @@ export function exportChartToMidi(parts: ChartPart[], settings: MidiExportSettin
           return;
         }
 
-        const parsed = parseChordSymbol(resolved, part.key);
-        const notes = buildVoicing(parsed, {
-          ...settings,
-          lastTopNote,
-        });
-
-        if (notes.length > 1) {
-          const chordNotes = notes.slice(1);
-          lastTopNote = Math.max(...chordNotes);
+        if (resolved === ".") {
+          currentTick += durations[index];
+          return;
         }
 
-        notes.forEach((midiNote) => {
-          track.addNote({
-            midi: midiNote,
-            ticks: currentTick,
-            durationTicks: durations[index],
-            velocity: 0.8,
+        try {
+          const parsed = parseChordSymbol(resolved, part.key);
+          const notes = buildVoicing(parsed, {
+            ...settings,
+            lastTopNote,
           });
-        });
+
+          if (notes.length > 1) {
+            const chordNotes = notes.slice(1);
+            lastTopNote = Math.max(...chordNotes);
+          }
+
+          notes.forEach((midiNote) => {
+            track.addNote({
+              midi: midiNote,
+              ticks: currentTick,
+              durationTicks: durations[index],
+              velocity: 0.8,
+            });
+          });
+
+          lastResolvedChord = resolved;
+        } catch (error) {
+          console.warn(`Skipping unrecognized chord symbol '${resolved}' in MIDI export.`, {
+            error,
+            part: part.part,
+            key: part.key,
+            measure: text,
+            token,
+          });
+        }
 
         currentTick += durations[index];
-        lastResolvedChord = resolved;
       });
     });
   });

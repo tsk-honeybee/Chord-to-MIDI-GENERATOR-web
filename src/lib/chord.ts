@@ -774,8 +774,48 @@ export function buildVoicing(
   return [...new Set([bassMidiNote, ...finalChordNotes])].sort((left, right) => left - right);
 }
 
+function isStandaloneParentheticalToken(token: string): boolean {
+  return token.startsWith("(") && token.endsWith(")");
+}
+
 export function splitMeasureText(text: string): string[] {
-  return text.split(" ").filter(Boolean);
+  const tokens: string[] = [];
+  let current = "";
+  let parenDepth = 0;
+
+  const pushToken = (rawToken: string) => {
+    const token = rawToken.trim();
+    if (!token) {
+      return;
+    }
+
+    if (isStandaloneParentheticalToken(token)) {
+      tokens.push(...splitMeasureText(token.slice(1, -1)));
+      return;
+    }
+
+    tokens.push(token);
+  };
+
+  for (const character of text) {
+    if (/\s/.test(character) && parenDepth === 0) {
+      pushToken(current);
+      current = "";
+      continue;
+    }
+
+    if (character === "(") {
+      parenDepth += 1;
+    } else if (character === ")" && parenDepth > 0) {
+      parenDepth -= 1;
+    }
+
+    current += character;
+  }
+
+  pushToken(current);
+
+  return tokens;
 }
 
 export function durationTicksForN(count: number, ticksPerBeat: number): number[] {

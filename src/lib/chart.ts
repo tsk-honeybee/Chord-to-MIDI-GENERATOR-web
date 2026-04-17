@@ -1,4 +1,4 @@
-import type { KeyName } from "./chord";
+import { splitMeasureText, type KeyName } from "./chord";
 
 export interface ChartPart {
   id: string;
@@ -240,5 +240,5 @@ export function countFilledMeasures(parts: ChartPart[]): number {
 export function countChordTokens(parts: ChartPart[]): number {
   return parts
     .flatMap((part) => part.measures)
-    .reduce((count, measure) => count + measure.split(" ").filter(Boolean).length, 0);
+    .reduce((count, measure) => count + splitMeasureText(measure).length, 0);
 }
