@@ -12,7 +12,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       manifest: {
         name: "Chord to MIDI Generator",
         short_name: "ChordMIDI",

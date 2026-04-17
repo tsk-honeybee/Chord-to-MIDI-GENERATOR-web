@@ -888,12 +888,11 @@ function App() {
   const handleApplyUpdate = useEffectEvent(async () => {
     try {
       setIsApplyingUpdate(true);
+      setIsUpdateReady(false);
       await applyPwaUpdate();
-      window.setTimeout(() => {
-        window.location.reload();
-      }, 1500);
     } catch (error) {
       console.error(error);
+      setIsUpdateReady(true);
       setIsApplyingUpdate(false);
       showToast("업데이트 적용 중 오류가 발생했습니다.");
     }
@@ -1719,7 +1718,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-        © TSK · v1.0.5
+        © TSK · v1.0.6
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}
