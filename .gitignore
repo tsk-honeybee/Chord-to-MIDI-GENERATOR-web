@@ -1,0 +1,16 @@
+node_modules/
+node_modules/.vite/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+.DS_Store
+**/.DS_Store
+*.log
+.vite/
+.vercel/
+.env
+.env.*
+!.env.example

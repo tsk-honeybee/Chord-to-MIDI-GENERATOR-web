@@ -1,0 +1,95 @@
+import { Midi } from "@tonejs/midi";
+import type { ChartPart } from "./chart";
+import {
+  buildVoicing,
+  durationTicksForN,
+  parseChordSymbol,
+  splitMeasureText,
+  type VoicingStyle,
+} from "./chord";
+
+export interface MidiExportSettings {
+  omit5OnConflict: boolean;
+  omitDuplicatedBass: boolean;
+  voicingStyle: VoicingStyle;
+  voicingOctaveShift: number;
+}
+
+export function exportChartToMidi(parts: ChartPart[], settings: MidiExportSettings): Blob {
+  const midi = new Midi();
+  midi.header.tempos.push({ bpm: 120, ticks: 0 });
+
+  const firstKey = parts[0]?.key;
+  if (firstKey && !["Cb", "Gb", "Db", "Ab", "Eb", "Bb", "F", "C", "G", "D", "A", "E", "B", "F#", "C#"].includes(firstKey)) {
+    // Skip unsupported key signatures for the MIDI header.
+  } else if (firstKey) {
+    midi.header.keySignatures.push({ key: firstKey, scale: "major", ticks: 0 });
+  }
+
+  const track = midi.addTrack();
+  track.name = "Chord Progression";
+
+  let currentTick = 0;
+  let lastResolvedChord: string | null = null;
+  let lastTopNote: number | null = null;
+
+  parts.forEach((part) => {
+    part.measures.forEach((measure) => {
+      const text = measure.trim();
+      if (text.toLowerCase() === "x") {
+        currentTick += 4 * midi.header.ppq;
+        return;
+      }
+
+      if (!text) {
+        currentTick += 4 * midi.header.ppq;
+        return;
+      }
+
+      const chordTokens = splitMeasureText(text);
+      const durations = durationTicksForN(chordTokens.length, midi.header.ppq);
+
+      chordTokens.forEach((token, index) => {
+        const resolved = token === "%" ? lastResolvedChord : token;
+        if (!resolved) {
+          currentTick += durations[index];
+          return;
+        }
+
+        const parsed = parseChordSymbol(resolved, part.key);
+        const notes = buildVoicing(parsed, {
+          ...settings,
+          lastTopNote,
+        });
+
+        if (notes.length > 1) {
+          const chordNotes = notes.slice(1);
+          lastTopNote = Math.max(...chordNotes);
+        }
+
+        notes.forEach((midiNote) => {
+          track.addNote({
+            midi: midiNote,
+            ticks: currentTick,
+            durationTicks: durations[index],
+            velocity: 0.8,
+          });
+        });
+
+        currentTick += durations[index];
+        lastResolvedChord = resolved;
+      });
+    });
+  });
+
+  return new Blob([Uint8Array.from(midi.toArray())], { type: "audio/midi" });
+}
+
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
