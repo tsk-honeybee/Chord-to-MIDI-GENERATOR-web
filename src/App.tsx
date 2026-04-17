@@ -583,6 +583,80 @@ function KeyDropdown({ value, onChange }: { value: KeyName; onChange: (v: KeyNam
   );
 }
 
+function GridDropdown({
+  value,
+  options,
+  columns,
+  onChange,
+  title,
+}: {
+  value: string;
+  options: readonly string[];
+  columns: number;
+  onChange: (value: string) => void;
+  title: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  return (
+    <div
+      className={`custom-dropdown custom-dropdown--block ${isOpen ? "is-open" : ""}`}
+      ref={containerRef}
+    >
+      <button
+        type="button"
+        className="custom-dropdown__trigger"
+        onClick={() => setIsOpen((current) => !current)}
+        title={title}
+      >
+        {value}
+        <svg viewBox="0 0 24 24" width="16" height="16" className="dropdown-arrow" aria-hidden="true">
+          <path d="M7 10l5 5 5-5z" fill="currentColor" />
+        </svg>
+      </button>
+
+      {isOpen ? (
+        <div className="custom-dropdown__menu custom-dropdown__menu--grid">
+          <div
+            className="custom-dropdown__grid"
+            style={{ "--dropdown-columns": String(columns) } as CSSProperties}
+          >
+            {options.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`custom-dropdown__option custom-dropdown__option--grid ${
+                  option === value ? "is-selected" : ""
+                }`}
+                onClick={() => {
+                  onChange(option);
+                  setIsOpen(false);
+                }}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function App() {
   const persisted = normalizePersistedState();
   const [mode, setMode] = useState<NotationMode>(persisted.mode);
@@ -1640,7 +1714,7 @@ function App() {
 
         <aside className="inspector">
 
-          <section className="panel">
+          <section className="panel panel--builder">
             <div className="panel__header">
               <div>
                 <span className="panel__eyebrow">코드 삽입</span>
@@ -1651,40 +1725,34 @@ function App() {
             <div className="builder-grid">
               <label className="field">
                 <span>Root</span>
-                <select
+                <GridDropdown
                   value={builder.root}
-                  onChange={(event) =>
+                  options={builderRootOptions}
+                  columns={4}
+                  title="루트 선택"
+                  onChange={(value) =>
                     setBuilder((current) => ({
                       ...current,
-                      root: event.target.value,
+                      root: value,
                     }))
                   }
-                >
-                  {builderRootOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
 
               <label className="field">
                 <span>Quality</span>
-                <select
+                <GridDropdown
                   value={builder.quality}
-                  onChange={(event) =>
+                  options={QUALITY_SYMBOLS}
+                  columns={4}
+                  title="퀄리티 선택"
+                  onChange={(value) =>
                     setBuilder((current) => ({
                       ...current,
-                      quality: event.target.value,
+                      quality: value,
                     }))
                   }
-                >
-                  {QUALITY_SYMBOLS.map((quality) => (
-                    <option key={quality} value={quality}>
-                      {quality}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
             </div>
 
@@ -1913,7 +1981,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-        © TSK · v1.1.0
+        © TSK · v1.1.1
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}

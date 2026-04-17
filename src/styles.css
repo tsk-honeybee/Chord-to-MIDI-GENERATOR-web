@@ -489,14 +489,14 @@ button:disabled::before {
 .part-card__meta .field--compact select {
   width: 72px;
   min-width: 72px;
-  min-height: 38px;
-  height: 38px;
+  min-height: 32px;
+  height: 32px;
   padding-inline: 10px;
 }
 
 .field {
   display: grid;
-  gap: 9px;
+  gap: 5px;
 }
 
 .field span {
@@ -504,7 +504,7 @@ button:disabled::before {
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.1;
   letter-spacing: 0.15em;
   text-transform: uppercase;
 }
@@ -657,8 +657,13 @@ button:disabled::before {
   min-width: 96px;
   width: auto;
   margin-top: 20px;
+  min-height: 32px;
+  height: 32px;
+  padding-inline: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
   font-family: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
-  font-size: 1.2rem;
+  font-size: 1.04rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   background: rgba(15, 22, 33, 0.4);
@@ -676,8 +681,8 @@ button:disabled::before {
   display: grid;
   gap: 2px;
   position: relative;
-  min-height: 44px;
-  padding: 5px 10px;
+  min-height: 38px;
+  padding: 4px 9px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-top-color: rgba(255, 255, 255, 0.1);
@@ -711,7 +716,7 @@ button:disabled::before {
 
 .measure-card__index {
   color: var(--muted);
-  font-size: 0.58rem;
+  font-size: 0.54rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   line-height: 1;
@@ -724,7 +729,7 @@ button:disabled::before {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  font-size: 0.98rem;
+  font-size: 0.92rem;
   outline: none;
 }
 
@@ -814,7 +819,7 @@ button:disabled::before {
   gap: 16px;
   min-width: 0;
   position: relative;
-  z-index: 1;
+  z-index: 20;
 }
 
 .panel {
@@ -822,6 +827,14 @@ button:disabled::before {
   background:
     linear-gradient(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025)),
     linear-gradient(180deg, rgba(13, 21, 33, 0.8), rgba(9, 15, 24, 0.9));
+}
+
+.panel--builder {
+  z-index: 40;
+}
+
+.panel--builder .panel__header {
+  margin-bottom: 8px;
 }
 
 .panel--selection {
@@ -938,6 +951,23 @@ button:disabled::before {
   min-width: 60px;
 }
 
+.custom-dropdown--block {
+  display: block;
+  width: 100%;
+  z-index: 40;
+}
+
+.custom-dropdown--block.is-open {
+  z-index: 120;
+}
+
+.custom-dropdown--block .custom-dropdown__menu--grid {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  max-width: min(calc(100vw - 32px), 320px);
+}
+
 .custom-dropdown__trigger {
   display: flex;
   align-items: center;
@@ -976,6 +1006,22 @@ button:disabled::before {
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5);
   z-index: 10000 !important;
   animation: fadeIn 0.15s ease-out;
+}
+
+.custom-dropdown__menu--grid {
+  width: max-content;
+  min-width: 0;
+  max-width: min(calc(100vw - 32px), 320px);
+  padding: 8px;
+  background: rgba(10, 16, 24, 0.99) !important;
+}
+
+.custom-dropdown__menu--grid::before {
+  background: rgba(10, 16, 24, 0.995);
+}
+
+.custom-dropdown__menu--grid::after {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 58%);
 }
 
 .custom-dropdown__menu::before,
@@ -1060,6 +1106,36 @@ button:disabled::before {
 .custom-dropdown__option:hover {
   background: rgba(111, 143, 245, 0.2);
   color: #6f8ff5;
+}
+
+.custom-dropdown__grid {
+  display: grid;
+  grid-template-columns: repeat(var(--dropdown-columns, 3), minmax(56px, 72px));
+  gap: 6px;
+  justify-content: start;
+}
+
+.custom-dropdown__option--grid {
+  min-height: 38px;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.custom-dropdown__option--grid:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.custom-dropdown__option--grid.is-selected {
+  color: #f5f8ff;
+  background: linear-gradient(180deg, rgba(58, 88, 153, 0.92), rgba(42, 67, 122, 0.96));
+  box-shadow: 0 8px 20px rgba(33, 57, 110, 0.18);
 }
 
 .chart-textarea {
@@ -1217,8 +1293,8 @@ button:disabled::before {
 
 .part-card__actions .button,
 .part-card__controls .button {
-  min-width: 42px;
-  padding-inline: 12px;
+  min-width: 34px;
+  padding-inline: 10px;
 }
 
 .part-card__controls {
@@ -1230,14 +1306,14 @@ button:disabled::before {
 }
 
 .part-card__controls .measure-step-input {
-  width: 60px;
-  min-width: 60px;
-  max-width: 60px;
-  min-height: 38px;
-  height: 38px;
+  width: 52px;
+  min-width: 52px;
+  max-width: 52px;
+  min-height: 32px;
+  height: 32px;
   padding: 0 6px !important;
   text-align: center;
-  font-size: 0.96rem;
+  font-size: 0.9rem;
   font-weight: 700;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(174, 191, 214, 0.12);
@@ -1246,9 +1322,9 @@ button:disabled::before {
 }
 
 .part-card__controls .button {
-  min-height: 38px;
-  height: 38px;
-  min-width: 38px;
+  min-height: 32px;
+  height: 32px;
+  min-width: 32px;
   padding-inline: 0;
   white-space: nowrap;
 }
@@ -1260,8 +1336,13 @@ button:disabled::before {
 }
 
 .button--icon svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
+}
+
+.button--icon.danger svg {
+  width: 17px;
+  height: 17px;
 }
 
 .part-card__footer {
@@ -1783,8 +1864,6 @@ html {
 
   .editor-toolbar__main,
   .editor-toolbar__secondary,
-  .part-card__meta,
-  .part-card__controls,
   .panel__actions {
     flex-wrap: wrap;
   }
@@ -1792,6 +1871,22 @@ html {
   .editor-toolbar__primary-controls,
   .editor-toolbar__option-toggles {
     flex-wrap: wrap;
+  }
+
+  .part-card__header,
+  .part-card__meta,
+  .part-card__controls {
+    flex-wrap: nowrap;
+  }
+
+  .part-card__meta {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .part-title-input {
+    flex: 1 1 72px;
+    min-width: 0;
   }
 
   .app-version {
