@@ -1,6 +1,7 @@
 import {
   startTransition,
   useEffect,
+  useDeferredValue,
   useEffectEvent,
   useRef,
   useState,
@@ -38,6 +39,7 @@ import {
 } from "./lib/chord";
 import { playChordPreview, startHeldChordPreview, stopChordPreview } from "./lib/audioPreview";
 import { downloadBlob, exportChartToMidi } from "./lib/midi";
+import { applyPwaUpdate, subscribeToPwaRefresh } from "./lib/pwa";
 
 interface PersistedState {
   mode: NotationMode;
@@ -164,7 +166,7 @@ function resolveChordToken(
       const tokens = splitMeasureText(measureText);
       for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex += 1) {
         const token = tokens[tokenIndex];
-        const resolvedChord = token === "%" ? lastResolvedChord : token;
+        const resolvedChord: string | null = token === "%" ? lastResolvedChord : token;
 
         if (
           part.id === target.partId &&
@@ -520,6 +522,8 @@ function App() {
   const [measureSteps, setMeasureSteps] = useState<Record<string, number>>({});
   const [toast, setToast] = useState<string | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isUpdateReady, setIsUpdateReady] = useState(false);
+  const [isApplyingUpdate, setIsApplyingUpdate] = useState(false);
   const [manualScale, setManualScale] = useState<number>(() => {
     if (typeof window === "undefined") {
       return 1;
@@ -617,6 +621,12 @@ function App() {
   }, [isHelpOpen]);
 
   useEffect(() => {
+    return subscribeToPwaRefresh(() => {
+      setIsUpdateReady(true);
+    });
+  }, []);
+
+  useEffect(() => {
     const activePart = parts.find((part) => part.id === selectedMeasure.partId) ?? parts[0];
     if (!activePart) {
       return;
@@ -640,6 +650,7 @@ function App() {
   const selectedKey = selectedPart?.key ?? "C";
   const selectedMeasureText = selectedPart?.measures[selectedMeasure.measureIndex] ?? "";
   const builderRootOptions = mode === "degree" ? romanDegreesForKey(selectedKey) : getNoteNamesForKey(selectedKey);
+  const deferredUpdateReady = useDeferredValue(isUpdateReady);
 
   useEffect(() => {
     if (!builderRootOptions.includes(builder.root)) {
@@ -874,6 +885,20 @@ function App() {
     showToast("차트 텍스트를 저장했습니다.");
   };
 
+  const handleApplyUpdate = useEffectEvent(async () => {
+    try {
+      setIsApplyingUpdate(true);
+      await applyPwaUpdate();
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (error) {
+      console.error(error);
+      setIsApplyingUpdate(false);
+      showToast("업데이트 적용 중 오류가 발생했습니다.");
+    }
+  });
+
   const handleExportMidi = () => {
     try {
       const blob = exportChartToMidi(parts, settings);
@@ -1081,6 +1106,35 @@ function App() {
           </button>
         </div>
       </header>
+
+      {deferredUpdateReady ? (
+        <section className="update-banner" role="status" aria-live="polite">
+          <div className="update-banner__copy">
+            <span className="panel__eyebrow">새 업데이트</span>
+            <strong>새 버전이 준비되었습니다.</strong>
+            <p>업데이트를 적용하면 현재 작업 화면이 초기화될 수 있습니다. 먼저 차트를 저장한 뒤 진행하는 것을 권장합니다.</p>
+          </div>
+          <div className="update-banner__actions">
+            <button className="button button--ghost" onClick={handleExportChart}>
+              차트 저장
+            </button>
+            <button
+              className="button button--primary"
+              onClick={() => void handleApplyUpdate()}
+              disabled={isApplyingUpdate}
+            >
+              {isApplyingUpdate ? "업데이트 중..." : "업데이트"}
+            </button>
+            <button
+              className="button button--ghost"
+              onClick={() => setIsUpdateReady(false)}
+              disabled={isApplyingUpdate}
+            >
+              나중에
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <main className="studio-layout">
         <div className="workspace-column">
@@ -1663,6 +1717,10 @@ function App() {
           </div>
         </div>
       ) : null}
+
+      <div className="app-version" aria-label="앱 버전">
+        v1.0.4
+      </div>
 
       {toast ? <div className="toast">{toast}</div> : null}
     </div>

@@ -1,10 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { registerSW } from "virtual:pwa-register";
 import App from "./App";
+import { initializePwaRegistration } from "./lib/pwa";
 import "./styles.css";
 
-registerSW({ immediate: true });
+initializePwaRegistration();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
