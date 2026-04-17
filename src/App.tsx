@@ -265,6 +265,56 @@ function createFallbackId(): string {
   return `part-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function getMeasureTokenFontSize(label: string, tokenCount: number): CSSProperties | undefined {
+  let fontSize = 0.96;
+
+  if (tokenCount >= 2) {
+    fontSize -= 0.04;
+  }
+
+  if (tokenCount >= 3) {
+    fontSize -= 0.04;
+  }
+
+  if (label.length >= 5) {
+    fontSize -= 0.04;
+  }
+
+  if (label.length >= 7) {
+    fontSize -= 0.04;
+  }
+
+  return {
+    fontSize: `${Math.max(0.76, fontSize)}rem`,
+  };
+}
+
+function getMeasureInputFontSize(value: string): CSSProperties | undefined {
+  const tokenCount = splitMeasureText(value).length;
+  const compactValue = value.replaceAll(" ", "");
+  let fontSize = 0.98;
+
+  if (tokenCount >= 2) {
+    fontSize -= 0.06;
+  }
+
+  if (tokenCount >= 3) {
+    fontSize -= 0.06;
+  }
+
+  if (compactValue.length >= 8) {
+    fontSize -= 0.05;
+  }
+
+  if (compactValue.length >= 12) {
+    fontSize -= 0.05;
+  }
+
+  return {
+    fontSize: `${Math.max(0.78, fontSize)}rem`,
+  };
+}
+
 function normalizePersistedState(): PersistedState {
   if (typeof window === "undefined") {
     return {
@@ -1372,14 +1422,15 @@ function App() {
                           } ${
                             measure.trim().toLowerCase() === "x" ? "is-muted" : ""
                           }`}
+                          onClick={() => setSelectedMeasure({ partId: part.id, measureIndex })}
                         >
                           <span className="measure-card__index">#{measureIndex + 1}</span>
                           <input
                             value={measure}
+                            style={getMeasureInputFontSize(measure)}
                             placeholder={measureIndex === 0 ? "예시: CM7" : ""}
                             readOnly={settings.previewEnabled}
                             onFocus={() => setSelectedMeasure({ partId: part.id, measureIndex })}
-                            onClick={() => setSelectedMeasure({ partId: part.id, measureIndex })}
                             onChange={(event) => handleMeasureChange(part.id, measureIndex, event.target.value)}
                           />
                           {settings.previewEnabled && measurePreviewRows.length > 0 ? (
@@ -1391,6 +1442,7 @@ function App() {
                                   className={`measure-card__token-button ${
                                     playingPreviewId === row.id ? "is-playing" : ""
                                   }`}
+                                  style={getMeasureTokenFontSize(row.label, measurePreviewRows.length)}
                                   disabled={row.midiNotes.length === 0}
                                   onPointerDown={(event) => {
                                     event.preventDefault();
@@ -1718,7 +1770,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-        © TSK · v1.0.7
+        © TSK · v1.0.8
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}
