@@ -3,7 +3,7 @@ export const MINOR_KEYS = ["Cm", "C#m", "Dm", "D#m", "Ebm", "Em", "Fm", "F#m", "
 export const KEYS = [...MAJOR_KEYS, ...MINOR_KEYS] as const;
 export type KeyName = typeof KEYS[number];
 
-export type VoicingStyle = "None" | "Closed 1" | "Closed 2" | "Closed 3" | "Closed 4" | "Drop 2" | "Spread";
+export type VoicingStyle = "None" | "Closed 1" | "Closed 2" | "Closed 3" | "Closed 4" | "Spread";
 export type NotationMode = "alphabet" | "degree";
 
 export interface ParsedChord {
@@ -56,7 +56,6 @@ export const VOICING_STYLES: VoicingStyle[] = [
   "Closed 2",
   "Closed 3",
   "Closed 4",
-  "Drop 2",
   "Spread",
 ];
 
@@ -771,10 +770,17 @@ export function buildVoicing(
     }
   }
 
+  const bassPc = parsed.bassNote ? nameToPc(parsed.bassNote) : parsed.rootPc;
+  const bassBaseNote =
+    bassPc >= 7
+      ? BASE_OCTAVE - 24 + voicingOctaveShift * 12 + bassPc
+      : BASE_OCTAVE - 12 + voicingOctaveShift * 12 + bassPc;
+
   let finalChordNotes = [...closedNotes];
   if (voicingStyle === "None") {
-    const bassPc = parsed.bassNote ? nameToPc(parsed.bassNote) : parsed.rootPc;
-    const rootNoteInVoicing = BASE_OCTAVE + voicingOctaveShift * 12 + chordRootPc;
+    // Keep the right hand stacked directly above the bass instead of anchoring high-root chords two octaves up.
+    const rootNoteInVoicing =
+      Math.ceil((bassBaseNote + 1 - chordRootPc) / 12) * 12 + chordRootPc;
     finalChordNotes = [];
 
     if (intervals.includes(0) && parsed.quality !== "blk") {
@@ -785,7 +791,7 @@ export function buildVoicing(
       .filter((interval) => interval !== 0 || parsed.quality === "blk")
       .sort((left, right) => left - right);
 
-    let lastNote = finalChordNotes.length > 0 ? rootNoteInVoicing : BASE_OCTAVE + voicingOctaveShift * 12 + bassPc;
+    let lastNote = finalChordNotes.length > 0 ? rootNoteInVoicing : bassBaseNote;
     sortedIntervals.forEach((interval) => {
       const notePc = (chordRootPc + (interval % 12) + 12) % 12;
       let candidate = Math.floor(lastNote / 12) * 12 + notePc;
@@ -796,20 +802,18 @@ export function buildVoicing(
       finalChordNotes.sort((left, right) => left - right);
       lastNote = finalChordNotes[finalChordNotes.length - 1];
     });
-  } else if (voicingStyle === "Drop 2" && finalChordNotes.length >= 4) {
-    const noteToDrop = finalChordNotes.splice(-2, 1)[0];
-    finalChordNotes.unshift(noteToDrop - 12);
-    finalChordNotes.sort((left, right) => left - right);
   } else if (voicingStyle === "Spread" && finalChordNotes.length >= 3) {
     finalChordNotes = finalChordNotes.map((note, index) => (index % 2 === 1 ? note + 12 : note));
   }
 
-  const bassPc = parsed.bassNote ? nameToPc(parsed.bassNote) : parsed.rootPc;
-  const bassBaseNote =
-    bassPc >= 7
-      ? BASE_OCTAVE - 24 + voicingOctaveShift * 12 + bassPc
-      : BASE_OCTAVE - 12 + voicingOctaveShift * 12 + bassPc;
-  const bassMidiNote = isClosedVoicing ? bassBaseNote - 12 : bassBaseNote;
+  const shouldLowerVoicingOctave = voicingStyle === "Spread";
+
+  if (shouldLowerVoicingOctave) {
+    finalChordNotes = finalChordNotes.map((note) => note - 12);
+  }
+
+  const bassMidiNote =
+    voicingStyle === "None" || isClosedVoicing || shouldLowerVoicingOctave ? bassBaseNote - 12 : bassBaseNote;
 
   if (omitDuplicatedBass && finalChordNotes.length >= 4) {
     finalChordNotes = finalChordNotes.filter((note) => note % 12 !== bassPc);

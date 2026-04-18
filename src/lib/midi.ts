@@ -67,13 +67,14 @@ export function exportChartToMidi(parts: ChartPart[], settings: MidiExportSettin
             ...settings,
             lastTopNote,
           });
+          const exportedNotes = notes.map((midiNote) => midiNote + 12);
 
-          if (notes.length > 1) {
-            const chordNotes = notes.slice(1);
+          if (exportedNotes.length > 1) {
+            const chordNotes = exportedNotes.slice(1);
             lastTopNote = Math.max(...chordNotes);
           }
 
-          notes.forEach((midiNote) => {
+          exportedNotes.forEach((midiNote) => {
             track.addNote({
               midi: midiNote,
               ticks: currentTick,

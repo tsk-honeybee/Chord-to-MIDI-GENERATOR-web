@@ -427,7 +427,7 @@ function normalizePersistedState(): PersistedState {
 
     const persistedVoicingStyle = parsed.settings?.voicingStyle as string | undefined;
     const normalizedVoicingStyle =
-      persistedVoicingStyle === "Default"
+      persistedVoicingStyle === "Default" || persistedVoicingStyle === "Drop 2"
         ? "None"
         : (persistedVoicingStyle as VoicingStyle | undefined) ?? DEFAULT_SETTINGS.voicingStyle;
 
@@ -2442,7 +2442,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-        © TSK · v1.2.2
+        © TSK · v1.2.3
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}
