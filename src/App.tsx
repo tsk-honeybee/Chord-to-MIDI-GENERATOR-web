@@ -331,7 +331,7 @@ function buildPreviewRow(
 const DEFAULT_SETTINGS: ExportSettings = {
   omit5OnConflict: true,
   omitDuplicatedBass: false,
-  voicingStyle: "Default",
+  voicingStyle: "Closed 1",
   voicingOctaveShift: 0,
   previewEnabled: false,
   previewVolume: 0.72,
@@ -425,13 +425,19 @@ function normalizePersistedState(): PersistedState {
         measures: Array.isArray(part.measures) && part.measures.length > 0 ? part.measures : ["", "", "", ""],
       })) ?? createDefaultParts();
 
+    const persistedVoicingStyle = parsed.settings?.voicingStyle as string | undefined;
+    const normalizedVoicingStyle =
+      persistedVoicingStyle === "Default"
+        ? "None"
+        : (persistedVoicingStyle as VoicingStyle | undefined) ?? DEFAULT_SETTINGS.voicingStyle;
+
     return {
       mode: parsed.mode === "degree" ? "degree" : "alphabet",
       parts,
       settings: {
         omit5OnConflict: parsed.settings?.omit5OnConflict ?? DEFAULT_SETTINGS.omit5OnConflict,
         omitDuplicatedBass: parsed.settings?.omitDuplicatedBass ?? DEFAULT_SETTINGS.omitDuplicatedBass,
-        voicingStyle: parsed.settings?.voicingStyle ?? DEFAULT_SETTINGS.voicingStyle,
+        voicingStyle: normalizedVoicingStyle,
         voicingOctaveShift: parsed.settings?.voicingOctaveShift ?? DEFAULT_SETTINGS.voicingOctaveShift,
         previewEnabled: parsed.settings?.previewEnabled ?? DEFAULT_SETTINGS.previewEnabled,
         previewVolume: parsed.settings?.previewVolume ?? DEFAULT_SETTINGS.previewVolume,
@@ -2436,7 +2442,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-        © TSK · v1.2.1
+        © TSK · v1.2.2
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}

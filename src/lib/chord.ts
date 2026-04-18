@@ -3,7 +3,7 @@ export const MINOR_KEYS = ["Cm", "C#m", "Dm", "D#m", "Ebm", "Em", "Fm", "F#m", "
 export const KEYS = [...MAJOR_KEYS, ...MINOR_KEYS] as const;
 export type KeyName = typeof KEYS[number];
 
-export type VoicingStyle = "Default" | "Closed 1" | "Closed 2" | "Closed 3" | "Closed 4" | "Drop 2" | "Spread";
+export type VoicingStyle = "None" | "Closed 1" | "Closed 2" | "Closed 3" | "Closed 4" | "Drop 2" | "Spread";
 export type NotationMode = "alphabet" | "degree";
 
 export interface ParsedChord {
@@ -51,7 +51,7 @@ export const QUALITY_SYMBOLS = [
   "omit5",
 ] as const;
 export const VOICING_STYLES: VoicingStyle[] = [
-  "Default",
+  "None",
   "Closed 1",
   "Closed 2",
   "Closed 3",
@@ -772,7 +772,7 @@ export function buildVoicing(
   }
 
   let finalChordNotes = [...closedNotes];
-  if (voicingStyle === "Default") {
+  if (voicingStyle === "None") {
     const bassPc = parsed.bassNote ? nameToPc(parsed.bassNote) : parsed.rootPc;
     const rootNoteInVoicing = BASE_OCTAVE + voicingOctaveShift * 12 + chordRootPc;
     finalChordNotes = [];
