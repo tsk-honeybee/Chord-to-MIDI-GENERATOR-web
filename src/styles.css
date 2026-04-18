@@ -1128,6 +1128,10 @@ button:disabled::before {
   text-align: center;
 }
 
+.custom-dropdown__spacer {
+  min-height: 38px;
+}
+
 .custom-dropdown__option--grid:hover {
   background: rgba(255, 255, 255, 0.1);
   color: var(--text);
@@ -1440,6 +1444,11 @@ button:disabled::before {
   color: white;
   background: linear-gradient(180deg, #7ee1d0, #49b9c8);
   box-shadow: 0 10px 20px rgba(73, 185, 200, 0.18);
+}
+
+.tension-pill:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .preview-list {

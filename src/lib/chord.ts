@@ -25,15 +25,19 @@ export interface ParsedChord {
 
 export const NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 export const NOTE_NAMES_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"] as const;
-export const TENSIONS_LIST = ["b9", "9", "#9", "11", "#11", "b13", "13"] as const;
+export const TENSIONS_LIST = ["b9", "add9", "#9", "11", "#11", "b13", "13"] as const;
 export const QUALITY_SYMBOLS = [
   "Major",
   "Minor",
   "6",
   "m6",
   "7",
+  "9",
   "M7",
+  "M9",
   "m7",
+  "m9",
+  "mM9",
   "7b5",
   "M7b5",
   "m7b5",
@@ -620,7 +624,8 @@ export function buildVoicing(
   let intervals: number[] = [];
 
   if (parsed.quality === "blk") {
-    intervals.push(2, 6, 10);
+    // Blackadder chord: keep the written root in the bass and stack an augmented triad above it.
+    intervals.push(10, 14, 18);
   } else {
     const allTensions = [...parsed.tensions, ...parsed.parenContents];
 
@@ -685,7 +690,7 @@ export function buildVoicing(
   const voicingMin = 45 + voicingOctaveShift * 12;
   const voicingMax = 57 + voicingOctaveShift * 12;
 
-  const chordRootPc = parsed.quality === "blk" ? (rootPc - 2 + 12) % 12 : rootPc;
+  const chordRootPc = rootPc;
   const chordNotePcs = [...new Set(intervals.map((interval) => (chordRootPc + (interval % 12) + 12) % 12))].sort(
     (left, right) => left - right,
   );

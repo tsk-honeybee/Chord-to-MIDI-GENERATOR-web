@@ -25,7 +25,6 @@ import {
 import {
   MAJOR_KEYS,
   MINOR_KEYS,
-  QUALITY_SYMBOLS,
   TENSIONS_LIST,
   VOICING_STYLES,
   buildStringFromParsed,
@@ -55,6 +54,47 @@ interface BuilderState {
   root: string;
   quality: string;
   tensions: string[];
+}
+
+const NINTH_QUALITIES = new Set(["9", "M9", "m9", "mM9"]);
+const QUALITY_DROPDOWN_OPTIONS: ReadonlyArray<string | null> = [
+  "Major", "Minor", null, null, null, null,
+  "6", "m6", null, null, null, null,
+  "7", "M7", "m7", "7b5", "M7b5", "m7b5",
+  "9", "M9", "m9", "mM9", null, null,
+  "dim", "dim7", "aug", "blk", null, null,
+  "sus2", "sus4", "omit3", "omit5", null, null,
+];
+
+function compareBuilderTensions(left: string, right: string): number {
+  const leftNumber = Number.parseInt(left.replaceAll(/\D/g, ""), 10);
+  const rightNumber = Number.parseInt(right.replaceAll(/\D/g, ""), 10);
+
+  if (leftNumber !== rightNumber) {
+    return leftNumber - rightNumber;
+  }
+
+  const accidentalRank = (value: string) => {
+    if (value.startsWith("b")) {
+      return -1;
+    }
+    if (value.startsWith("#")) {
+      return 1;
+    }
+    return 0;
+  };
+
+  return accidentalRank(left) - accidentalRank(right);
+}
+
+function getBuilderQualityText(quality: string): string {
+  if (quality === "Major") {
+    return "";
+  }
+  if (quality === "Minor") {
+    return "m";
+  }
+  return quality;
 }
 
 interface DialogAction {
@@ -589,12 +629,14 @@ function GridDropdown({
   columns,
   onChange,
   title,
+  menuMaxWidth,
 }: {
   value: string;
-  options: readonly string[];
+  options: readonly (string | null)[];
   columns: number;
   onChange: (value: string) => void;
   title: string;
+  menuMaxWidth?: number;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -630,25 +672,32 @@ function GridDropdown({
       </button>
 
       {isOpen ? (
-        <div className="custom-dropdown__menu custom-dropdown__menu--grid">
+        <div
+          className="custom-dropdown__menu custom-dropdown__menu--grid"
+          style={menuMaxWidth ? ({ maxWidth: `${menuMaxWidth}px` } as CSSProperties) : undefined}
+        >
           <div
             className="custom-dropdown__grid"
             style={{ "--dropdown-columns": String(columns) } as CSSProperties}
           >
-            {options.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={`custom-dropdown__option custom-dropdown__option--grid ${
-                  option === value ? "is-selected" : ""
-                }`}
-                onClick={() => {
-                  onChange(option);
-                  setIsOpen(false);
-                }}
-              >
-                {option}
-              </button>
+            {options.map((option, index) => (
+              option ? (
+                <button
+                  key={option}
+                  type="button"
+                  className={`custom-dropdown__option custom-dropdown__option--grid ${
+                    option === value ? "is-selected" : ""
+                  }`}
+                  onClick={() => {
+                    onChange(option);
+                    setIsOpen(false);
+                  }}
+                >
+                  {option}
+                </button>
+              ) : (
+                <span key={`spacer-${index}`} className="custom-dropdown__spacer" aria-hidden="true" />
+              )
             ))}
           </div>
         </div>
@@ -1137,19 +1186,18 @@ function App() {
       return;
     }
 
-    const naturalTensions = builder.tensions.filter((tension) => !/[b#]/.test(tension));
-    const accidentalTensions = builder.tensions.filter((tension) => /[b#]/.test(tension));
-    const qualityText =
-      builder.quality === "Major" ? "" : builder.quality === "Minor" ? "m" : builder.quality;
-    const tensionText = naturalTensions
+    const qualityHasBuiltInNinth = NINTH_QUALITIES.has(builder.quality);
+    const naturalTensions = builder.tensions
+      .filter((tension) => tension !== "add9" && !/[b#]/.test(tension))
       .slice()
-      .sort(
-        (left, right) =>
-          Number.parseInt(left.replaceAll(/\D/g, ""), 10) -
-          Number.parseInt(right.replaceAll(/\D/g, ""), 10),
-      )
-      .join("");
-    const parenText = accidentalTensions.length > 0 ? `(${accidentalTensions.sort().join(",")})` : "";
+      .sort(compareBuilderTensions);
+    const parentheticalTensions = [
+      ...(builder.tensions.includes("add9") && !qualityHasBuiltInNinth ? ["9"] : []),
+      ...builder.tensions.filter((tension) => /[b#]/.test(tension)),
+    ].sort(compareBuilderTensions);
+    const qualityText = getBuilderQualityText(builder.quality);
+    const tensionText = naturalTensions.join("");
+    const parenText = parentheticalTensions.length > 0 ? `(${parentheticalTensions.join(",")})` : "";
     const chordToParse = `${builder.root}${qualityText}${tensionText}${parenText}`;
 
     try {
@@ -1758,13 +1806,17 @@ function App() {
                 <span>Quality</span>
                 <GridDropdown
                   value={builder.quality}
-                  options={QUALITY_SYMBOLS}
-                  columns={4}
+                  options={QUALITY_DROPDOWN_OPTIONS}
+                  columns={6}
                   title="퀄리티 선택"
+                  menuMaxWidth={460}
                   onChange={(value) =>
                     setBuilder((current) => ({
                       ...current,
                       quality: value,
+                      tensions: NINTH_QUALITIES.has(value)
+                        ? current.tensions.filter((entry) => entry !== "add9")
+                        : current.tensions,
                     }))
                   }
                 />
@@ -1774,20 +1826,24 @@ function App() {
             <div className="tension-cloud">
               {TENSIONS_LIST.map((tension) => {
                 const active = builder.tensions.includes(tension);
+                const disabled = tension === "add9" && NINTH_QUALITIES.has(builder.quality);
                 return (
                   <button
                     key={tension}
                     className={`tension-pill ${active ? "is-active" : ""}`}
+                    disabled={disabled}
                     onClick={() =>
-                      setBuilder((current) => ({
-                        ...current,
-                        tensions: active
-                          ? current.tensions.filter((entry) => entry !== tension)
-                          : [...current.tensions, tension],
-                      }))
+                      disabled
+                        ? undefined
+                        : setBuilder((current) => ({
+                            ...current,
+                            tensions: active
+                              ? current.tensions.filter((entry) => entry !== tension)
+                              : [...current.tensions, tension],
+                          }))
                     }
                   >
-                    {tension}
+                    {tension === "add9" ? "9" : tension}
                   </button>
                 );
               })}
@@ -1996,7 +2052,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-        © TSK · v1.1.2
+        © TSK · v1.1.3
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}
