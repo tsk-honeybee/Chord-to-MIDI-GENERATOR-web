@@ -3,7 +3,7 @@ export const MINOR_KEYS = ["Cm", "C#m", "Dm", "D#m", "Ebm", "Em", "Fm", "F#m", "
 export const KEYS = [...MAJOR_KEYS, ...MINOR_KEYS] as const;
 export type KeyName = typeof KEYS[number];
 
-export type VoicingStyle = "Default" | "Closed" | "Drop 2" | "Spread";
+export type VoicingStyle = "Default" | "Closed 1" | "Closed 2" | "Closed 3" | "Closed 4" | "Drop 2" | "Spread";
 export type NotationMode = "alphabet" | "degree";
 
 export interface ParsedChord {
@@ -50,7 +50,15 @@ export const QUALITY_SYMBOLS = [
   "omit3",
   "omit5",
 ] as const;
-export const VOICING_STYLES: VoicingStyle[] = ["Default", "Closed", "Drop 2", "Spread"];
+export const VOICING_STYLES: VoicingStyle[] = [
+  "Default",
+  "Closed 1",
+  "Closed 2",
+  "Closed 3",
+  "Closed 4",
+  "Drop 2",
+  "Spread",
+];
 
 const BASE_OCTAVE = 48;
 const MAJOR_DEGREE_TO_SEMITONES: Record<string, number> = {
@@ -687,16 +695,28 @@ export function buildVoicing(
 
   intervals = [...new Set(intervals)].sort((left, right) => left - right);
   const highestTensionSemitone = Math.max(...intervals.filter((interval) => interval > 12), 0);
-  const voicingMin = 45 + voicingOctaveShift * 12;
-  const voicingMax = 57 + voicingOctaveShift * 12;
 
   const chordRootPc = rootPc;
   const chordNotePcs = [...new Set(intervals.map((interval) => (chordRootPc + (interval % 12) + 12) % 12))].sort(
     (left, right) => left - right,
   );
 
+  const isClosedVoicing =
+    voicingStyle === "Closed 1" ||
+    voicingStyle === "Closed 2" ||
+    voicingStyle === "Closed 3" ||
+    voicingStyle === "Closed 4";
+  const closedVoicingRotation =
+    voicingStyle === "Closed 2"
+      ? 1
+      : voicingStyle === "Closed 3"
+        ? 2
+        : voicingStyle === "Closed 4"
+          ? 3
+          : 0;
+
   const closedNotes: number[] = [];
-  if (voicingStyle === "Closed") {
+  if (isClosedVoicing) {
     const rootInstance = Math.round((60 - chordRootPc) / 12) * 12 + chordRootPc;
     chordNotePcs.forEach((pc) => {
       closedNotes.push(rootInstance + ((pc - chordRootPc + 12) % 12));
@@ -717,20 +737,38 @@ export function buildVoicing(
 
   closedNotes.sort((left, right) => left - right);
 
-  if (voicingStyle === "Closed" && closedNotes.length > 0) {
+  if (isClosedVoicing && closedNotes.length > 0) {
     const adjusted = closedNotes
       .map((note) => {
         let nextNote = note;
-        while (nextNote > voicingMax) {
+        while (nextNote > 57 + voicingOctaveShift * 12) {
           nextNote -= 12;
         }
-        while (nextNote < voicingMin) {
+        while (nextNote < 45 + voicingOctaveShift * 12) {
           nextNote += 12;
         }
-        return nextNote + 12;
+        return nextNote;
       })
       .sort((left, right) => left - right);
     closedNotes.splice(0, closedNotes.length, ...adjusted);
+  }
+
+  if (isClosedVoicing && closedNotes.length > 1) {
+    const availableRotations = Math.min(closedVoicingRotation, closedNotes.length - 1);
+    for (let rotation = 0; rotation < availableRotations; rotation += 1) {
+      const noteToRaise = closedNotes.shift();
+      if (noteToRaise === undefined) {
+        break;
+      }
+
+      let raisedNote = noteToRaise + 12;
+      while (closedNotes.length > 0 && raisedNote <= closedNotes[closedNotes.length - 1]) {
+        raisedNote += 12;
+      }
+
+      closedNotes.push(raisedNote);
+      closedNotes.sort((left, right) => left - right);
+    }
   }
 
   let finalChordNotes = [...closedNotes];
@@ -767,10 +805,11 @@ export function buildVoicing(
   }
 
   const bassPc = parsed.bassNote ? nameToPc(parsed.bassNote) : parsed.rootPc;
-  const bassMidiNote =
+  const bassBaseNote =
     bassPc >= 7
       ? BASE_OCTAVE - 24 + voicingOctaveShift * 12 + bassPc
       : BASE_OCTAVE - 12 + voicingOctaveShift * 12 + bassPc;
+  const bassMidiNote = isClosedVoicing ? bassBaseNote - 12 : bassBaseNote;
 
   if (omitDuplicatedBass && finalChordNotes.length >= 4) {
     finalChordNotes = finalChordNotes.filter((note) => note % 12 !== bassPc);
