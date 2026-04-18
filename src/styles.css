@@ -711,6 +711,10 @@ button:disabled::before {
     inset 0 0 10px rgba(111, 143, 245, 0.1);
 }
 
+.measure-card:focus-within {
+  z-index: 30;
+}
+
 .measure-card.is-muted {
   opacity: 0.5;
 }
@@ -746,6 +750,177 @@ button:disabled::before {
   box-shadow: none;
   background: transparent;
   border: 0;
+}
+
+.measure-card__autocomplete {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 9px 8px 8px;
+  border: 1px solid rgba(126, 225, 208, 0.18);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(12, 18, 27, 0.98), rgba(8, 13, 21, 0.99)),
+    rgba(8, 13, 21, 0.98);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.44);
+  z-index: 90;
+  isolation: isolate;
+}
+
+.measure-card__autocomplete::before,
+.measure-card__autocomplete::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 30px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+  z-index: 0;
+}
+
+.measure-card__autocomplete::before {
+  top: 2px;
+  border-radius: 6px 6px 0 0;
+  background:
+    linear-gradient(180deg, rgba(126, 225, 208, 0.11) 0%, rgba(126, 225, 208, 0.07) 22%, rgba(126, 225, 208, 0.025) 46%, rgba(8, 13, 21, 0) 100%),
+    linear-gradient(90deg, rgba(8, 13, 21, 0) 0%, rgba(126, 225, 208, 0.01) 6%, rgba(126, 225, 208, 0.05) 20%, rgba(126, 225, 208, 0.16) 50%, rgba(126, 225, 208, 0.05) 80%, rgba(126, 225, 208, 0.01) 94%, rgba(8, 13, 21, 0) 100%),
+    linear-gradient(180deg, rgba(8, 13, 21, 0.9), rgba(8, 13, 21, 0));
+  filter: blur(7px);
+  transform-origin: 50% 0;
+}
+
+.measure-card__autocomplete::after {
+  bottom: 0;
+  border-radius: 0 0 6px 6px;
+  background:
+    linear-gradient(0deg, rgba(126, 225, 208, 0.16) 0%, rgba(126, 225, 208, 0.1) 18%, rgba(126, 225, 208, 0.03) 48%, rgba(8, 13, 21, 0) 100%),
+    linear-gradient(90deg, rgba(8, 13, 21, 0) 0%, rgba(126, 225, 208, 0.01) 6%, rgba(126, 225, 208, 0.08) 22%, rgba(155, 245, 227, 0.28) 50%, rgba(126, 225, 208, 0.08) 78%, rgba(126, 225, 208, 0.01) 94%, rgba(8, 13, 21, 0) 100%),
+    linear-gradient(0deg, rgba(8, 13, 21, 0.92), rgba(8, 13, 21, 0));
+  filter: blur(8px);
+  transform-origin: 50% 100%;
+}
+
+.measure-card__autocomplete.can-scroll-up::before {
+  opacity: 0.92;
+  animation: autocompleteGlowTop 3.6s ease-in-out infinite;
+}
+
+.measure-card__autocomplete.can-scroll-down::after {
+  opacity: 1;
+  animation: autocompleteGlowBottom 3.2s ease-in-out infinite;
+}
+
+.measure-card__autocomplete-list {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 3px;
+  max-height: 220px;
+  overflow-y: scroll;
+  padding-right: 12px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.measure-card__autocomplete-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.measure-card__autocomplete-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.measure-card__autocomplete-option span {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.measure-card__autocomplete-option:hover,
+.measure-card__autocomplete-option.is-active {
+  border-color: rgba(126, 225, 208, 0.24);
+  background: rgba(126, 225, 208, 0.1);
+  transform: translateY(-1px);
+}
+
+.measure-card__autocomplete-scrollbar {
+  position: absolute;
+  top: 9px;
+  right: 8px;
+  bottom: 8px;
+  width: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  opacity: 0.72;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.measure-card__autocomplete-scrollbar-thumb {
+  width: 100%;
+  min-height: 26px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(155, 245, 227, 0.9), rgba(86, 182, 165, 0.92));
+  box-shadow:
+    0 0 0 1px rgba(188, 255, 243, 0.12),
+    0 2px 10px rgba(92, 193, 175, 0.28);
+  transition:
+    transform 100ms linear,
+    height 100ms linear,
+    opacity 160ms ease;
+}
+
+.measure-card__autocomplete-scrollbar:not(.is-visible) {
+  opacity: 0;
+}
+
+@keyframes autocompleteGlowTop {
+  0%,
+  100% {
+    opacity: 0.56;
+    transform: scaleX(0.97) scaleY(0.98);
+  }
+  50% {
+    opacity: 0.92;
+    transform: scaleX(1.02) scaleY(1.03);
+  }
+}
+
+@keyframes autocompleteGlowBottom {
+  0%,
+  100% {
+    opacity: 0.62;
+    transform: scaleX(0.96) scaleY(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1.03) scaleY(1.04);
+  }
 }
 
 .measure-card__token-overlay {

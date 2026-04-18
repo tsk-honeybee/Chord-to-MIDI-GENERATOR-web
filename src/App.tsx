@@ -7,7 +7,7 @@ import {
   useState,
   type CSSProperties,
   type ChangeEvent,
-  type FocusEvent as ReactFocusEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
   countChordTokens,
@@ -40,6 +40,11 @@ import {
   type VoicingStyle,
 } from "./lib/chord";
 import { playChordPreview, startHeldChordPreview, stopChordPreview } from "./lib/audioPreview";
+import {
+  getChordAutocompleteMatch,
+  type ChordAutocompleteMatch,
+  type ChordAutocompleteSuggestion,
+} from "./lib/chordAutocomplete";
 import { downloadBlob, exportChartToMidi } from "./lib/midi";
 import { applyPwaUpdate, subscribeToPwaRefresh } from "./lib/pwa";
 
@@ -116,6 +121,12 @@ interface PreviewRow {
   notes: string[];
   midiNotes: number[];
   status: "ok" | "error" | "muted";
+}
+
+interface MeasureAutocompleteState extends ChordAutocompleteMatch {
+  partId: string;
+  measureIndex: number;
+  activeIndex: number;
 }
 
 interface ExportSettings {
@@ -720,6 +731,135 @@ function getPartTitleFontSize(value: string): string {
   return "1.04rem";
 }
 
+function MeasureAutocompleteMenu({
+  autocomplete,
+  onHover,
+  onApply,
+}: {
+  autocomplete: MeasureAutocompleteState;
+  onHover: (index: number) => void;
+  onApply: (suggestion: ChordAutocompleteSuggestion) => void;
+}) {
+  const menuId = `measure-autocomplete-${autocomplete.partId}-${autocomplete.measureIndex}`;
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollState, setScrollState] = useState({
+    isScrollable: false,
+    canScrollUp: false,
+    canScrollDown: false,
+    thumbHeight: 0,
+    thumbOffset: 0,
+  });
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) {
+      return;
+    }
+
+    const updateScrollState = () => {
+      const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+      const thumbHeight = maxScroll > 1 ? Math.max(26, (list.clientHeight / list.scrollHeight) * list.clientHeight) : 0;
+      const thumbTravel = Math.max(0, list.clientHeight - thumbHeight);
+      const thumbOffset = maxScroll > 1 ? (list.scrollTop / maxScroll) * thumbTravel : 0;
+      setScrollState({
+        isScrollable: maxScroll > 1,
+        canScrollUp: list.scrollTop > 2,
+        canScrollDown: list.scrollTop < maxScroll - 2,
+        thumbHeight,
+        thumbOffset,
+      });
+    };
+
+    updateScrollState();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateScrollState();
+    });
+    resizeObserver.observe(list);
+
+    list.addEventListener("scroll", updateScrollState, { passive: true });
+    window.addEventListener("resize", updateScrollState);
+
+    return () => {
+      resizeObserver.disconnect();
+      list.removeEventListener("scroll", updateScrollState);
+      window.removeEventListener("resize", updateScrollState);
+    };
+  }, [autocomplete.suggestions.length]);
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) {
+      return;
+    }
+
+    const activeOption = list.querySelector<HTMLElement>('[aria-selected="true"]');
+    activeOption?.scrollIntoView({
+      block: "nearest",
+    });
+
+    window.requestAnimationFrame(() => {
+      const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+      const thumbHeight = maxScroll > 1 ? Math.max(26, (list.clientHeight / list.scrollHeight) * list.clientHeight) : 0;
+      const thumbTravel = Math.max(0, list.clientHeight - thumbHeight);
+      const thumbOffset = maxScroll > 1 ? (list.scrollTop / maxScroll) * thumbTravel : 0;
+      setScrollState({
+        isScrollable: maxScroll > 1,
+        canScrollUp: list.scrollTop > 2,
+        canScrollDown: list.scrollTop < maxScroll - 2,
+        thumbHeight,
+        thumbOffset,
+      });
+    });
+  }, [autocomplete.activeIndex, autocomplete.suggestions.length]);
+
+  return (
+    <div
+      className={`measure-card__autocomplete ${
+        scrollState.isScrollable ? "is-scrollable" : ""
+      } ${scrollState.canScrollUp ? "can-scroll-up" : ""} ${
+        scrollState.canScrollDown ? "can-scroll-down" : ""
+      }`}
+      id={menuId}
+      role="listbox"
+      aria-label="코드 자동완성"
+    >
+      <div className="measure-card__autocomplete-list" ref={listRef}>
+        {autocomplete.suggestions.map((suggestion, index) => (
+          <button
+            key={`${suggestion.value}-${index}`}
+            id={`${menuId}-option-${index}`}
+            type="button"
+            role="option"
+            aria-selected={autocomplete.activeIndex === index}
+            tabIndex={-1}
+            className={`measure-card__autocomplete-option ${
+              autocomplete.activeIndex === index ? "is-active" : ""
+            }`}
+            onMouseEnter={() => onHover(index)}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onApply(suggestion)}
+          >
+            <span>{suggestion.label}</span>
+          </button>
+        ))}
+      </div>
+      <div
+        className={`measure-card__autocomplete-scrollbar ${scrollState.isScrollable ? "is-visible" : ""}`}
+        aria-hidden="true"
+      >
+        <div
+          className="measure-card__autocomplete-scrollbar-thumb"
+          style={{
+            height: `${scrollState.thumbHeight}px`,
+            transform: `translateY(${scrollState.thumbOffset}px)`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const persisted = normalizePersistedState();
   const [mode, setMode] = useState<NotationMode>(persisted.mode);
@@ -748,6 +888,7 @@ function App() {
   const [dialogState, setDialogState] = useState<AppDialogState | null>(null);
   const [isUpdateReady, setIsUpdateReady] = useState(false);
   const [isApplyingUpdate, setIsApplyingUpdate] = useState(false);
+  const [measureAutocomplete, setMeasureAutocomplete] = useState<MeasureAutocompleteState | null>(null);
   const [manualScale, setManualScale] = useState<number>(() => {
     if (typeof window === "undefined") {
       return 1;
@@ -763,8 +904,10 @@ function App() {
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const measureInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const toastTimerRef = useRef<number | null>(null);
   const previewTimerRef = useRef<number | null>(null);
+  const caretRestoreFrameRef = useRef<number | null>(null);
   const [playingPreviewId, setPlayingPreviewId] = useState<string | null>(null);
 
   const showToast = useEffectEvent((message: string) => {
@@ -777,6 +920,9 @@ function App() {
 
   useEffect(() => {
     return () => {
+      if (caretRestoreFrameRef.current) {
+        window.cancelAnimationFrame(caretRestoreFrameRef.current);
+      }
       if (toastTimerRef.current) {
         window.clearTimeout(toastTimerRef.current);
       }
@@ -812,6 +958,7 @@ function App() {
 
   useEffect(() => {
     if (settings.previewEnabled) {
+      setMeasureAutocomplete(null);
       return;
     }
 
@@ -905,6 +1052,8 @@ function App() {
     buildPreviewRow(parts, selectedMeasure, selectedKey, settings, mode, token, tokenIndex),
   );
 
+  const getMeasureInputRefKey = (partId: string, measureIndex: number) => `${partId}-${measureIndex}`;
+
   const updatePart = (partId: string, updater: (part: ChartPart) => ChartPart) => {
     setChartSource("grid");
     setParts((current) => current.map((part) => (part.id === partId ? updater(part) : part)));
@@ -915,6 +1064,170 @@ function App() {
       ...part,
       measures: part.measures.map((measure, index) => (index === measureIndex ? value : measure)),
     }));
+  };
+
+  const closeMeasureAutocomplete = (partId?: string, measureIndex?: number) => {
+    setMeasureAutocomplete((current) => {
+      if (!current) {
+        return null;
+      }
+
+      if (partId === undefined || measureIndex === undefined) {
+        return null;
+      }
+
+      return current.partId === partId && current.measureIndex === measureIndex ? null : current;
+    });
+  };
+
+  const restoreMeasureCaret = (partId: string, measureIndex: number, caretPosition: number) => {
+    if (caretRestoreFrameRef.current) {
+      window.cancelAnimationFrame(caretRestoreFrameRef.current);
+    }
+
+    caretRestoreFrameRef.current = window.requestAnimationFrame(() => {
+      const input = measureInputRefs.current[getMeasureInputRefKey(partId, measureIndex)];
+      if (!input) {
+        return;
+      }
+
+      input.focus();
+      input.setSelectionRange(caretPosition, caretPosition);
+      caretRestoreFrameRef.current = null;
+    });
+  };
+
+  const refreshMeasureAutocomplete = (
+    partId: string,
+    measureIndex: number,
+    partKey: KeyName,
+    value: string,
+    caret: number,
+  ) => {
+    if (settings.previewEnabled) {
+      closeMeasureAutocomplete();
+      return;
+    }
+
+    const nextMatch = getChordAutocompleteMatch(value, caret, {
+      key: partKey,
+      mode,
+    });
+
+    if (!nextMatch) {
+      closeMeasureAutocomplete(partId, measureIndex);
+      return;
+    }
+
+    setMeasureAutocomplete((current) => ({
+      ...nextMatch,
+      partId,
+      measureIndex,
+      activeIndex:
+        current?.partId === partId &&
+        current.measureIndex === measureIndex &&
+        current.token === nextMatch.token &&
+        current.kind === nextMatch.kind
+          ? Math.min(current.activeIndex, nextMatch.suggestions.length - 1)
+          : 0,
+    }));
+  };
+
+  const applyMeasureAutocomplete = (
+    partId: string,
+    measureIndex: number,
+    suggestion: ChordAutocompleteSuggestion,
+    options?: {
+      appendSpace?: boolean;
+    },
+  ) => {
+    const refKey = getMeasureInputRefKey(partId, measureIndex);
+    const input = measureInputRefs.current[refKey];
+    const currentValue =
+      input?.value ?? parts.find((part) => part.id === partId)?.measures[measureIndex] ?? "";
+    const activeAutocomplete =
+      measureAutocomplete?.partId === partId && measureAutocomplete.measureIndex === measureIndex
+        ? measureAutocomplete
+        : null;
+
+    if (!activeAutocomplete) {
+      return;
+    }
+
+    let nextValue =
+      currentValue.slice(0, activeAutocomplete.tokenStart) +
+      suggestion.value +
+      currentValue.slice(activeAutocomplete.tokenEnd);
+    let nextCaret = activeAutocomplete.tokenStart + suggestion.value.length;
+
+    if (options?.appendSpace) {
+      const nextChar = nextValue[nextCaret];
+      if (nextChar !== " ") {
+        nextValue = `${nextValue.slice(0, nextCaret)} ${nextValue.slice(nextCaret)}`;
+      }
+      nextCaret += 1;
+    }
+
+    handleMeasureChange(partId, measureIndex, nextValue);
+    closeMeasureAutocomplete();
+    restoreMeasureCaret(partId, measureIndex, nextCaret);
+  };
+
+  const handleMeasureKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>, partId: string, measureIndex: number) => {
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+
+    const activeAutocomplete =
+      measureAutocomplete?.partId === partId && measureAutocomplete.measureIndex === measureIndex
+        ? measureAutocomplete
+        : null;
+
+    if (!activeAutocomplete || activeAutocomplete.suggestions.length === 0) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setMeasureAutocomplete((current) =>
+        current && current.partId === partId && current.measureIndex === measureIndex
+          ? {
+              ...current,
+              activeIndex: (current.activeIndex + 1) % current.suggestions.length,
+            }
+          : current,
+      );
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setMeasureAutocomplete((current) =>
+        current && current.partId === partId && current.measureIndex === measureIndex
+          ? {
+              ...current,
+              activeIndex: (current.activeIndex - 1 + current.suggestions.length) % current.suggestions.length,
+            }
+          : current,
+      );
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " " || event.key === "Tab") {
+      event.preventDefault();
+      const suggestion = activeAutocomplete.suggestions[activeAutocomplete.activeIndex];
+      if (suggestion) {
+        applyMeasureAutocomplete(partId, measureIndex, suggestion, {
+          appendSpace: event.key === " ",
+        });
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMeasureAutocomplete(partId, measureIndex);
+    }
   };
 
   const commitPartName = (partId: string, value: string) => {
@@ -1614,6 +1927,10 @@ function App() {
                     {part.measures.map((measure, measureIndex) => {
                       const isSelected =
                         selectedMeasure.partId === part.id && selectedMeasure.measureIndex === measureIndex;
+                      const activeAutocomplete =
+                        measureAutocomplete?.partId === part.id && measureAutocomplete.measureIndex === measureIndex
+                          ? measureAutocomplete
+                          : null;
                       const measurePreviewRows = splitMeasureText(measure).map((token, tokenIndex) =>
                         buildPreviewRow(
                           parts,
@@ -1638,13 +1955,80 @@ function App() {
                         >
                           <span className="measure-card__index">#{measureIndex + 1}</span>
                           <input
+                            ref={(node) => {
+                              measureInputRefs.current[getMeasureInputRefKey(part.id, measureIndex)] = node;
+                            }}
                             value={measure}
                             style={getMeasureInputFontSize(measure)}
                             placeholder={measureIndex === 0 ? "예시: CM7" : ""}
                             readOnly={settings.previewEnabled}
-                            onFocus={() => setSelectedMeasure({ partId: part.id, measureIndex })}
-                            onChange={(event) => handleMeasureChange(part.id, measureIndex, event.target.value)}
+                            aria-haspopup="listbox"
+                            aria-expanded={Boolean(activeAutocomplete)}
+                            aria-controls={
+                              activeAutocomplete
+                                ? `measure-autocomplete-${activeAutocomplete.partId}-${activeAutocomplete.measureIndex}`
+                                : undefined
+                            }
+                            aria-activedescendant={
+                              activeAutocomplete
+                                ? `measure-autocomplete-${activeAutocomplete.partId}-${activeAutocomplete.measureIndex}-option-${activeAutocomplete.activeIndex}`
+                                : undefined
+                            }
+                            onFocus={(event) => {
+                              setSelectedMeasure({ partId: part.id, measureIndex });
+                              refreshMeasureAutocomplete(
+                                part.id,
+                                measureIndex,
+                                part.key,
+                                event.currentTarget.value,
+                                event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+                              );
+                            }}
+                            onBlur={() => closeMeasureAutocomplete(part.id, measureIndex)}
+                            onClick={(event) =>
+                              refreshMeasureAutocomplete(
+                                part.id,
+                                measureIndex,
+                                part.key,
+                                event.currentTarget.value,
+                                event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+                              )
+                            }
+                            onSelect={(event) =>
+                              refreshMeasureAutocomplete(
+                                part.id,
+                                measureIndex,
+                                part.key,
+                                event.currentTarget.value,
+                                event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+                              )
+                            }
+                            onKeyDown={(event) => handleMeasureKeyDown(event, part.id, measureIndex)}
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
+                              handleMeasureChange(part.id, measureIndex, nextValue);
+                              refreshMeasureAutocomplete(
+                                part.id,
+                                measureIndex,
+                                part.key,
+                                nextValue,
+                                event.target.selectionStart ?? nextValue.length,
+                              );
+                            }}
                           />
+                          {activeAutocomplete ? (
+                            <MeasureAutocompleteMenu
+                              autocomplete={activeAutocomplete}
+                              onHover={(index) =>
+                                setMeasureAutocomplete((current) =>
+                                  current && current.partId === part.id && current.measureIndex === measureIndex
+                                    ? { ...current, activeIndex: index }
+                                    : current,
+                                )
+                              }
+                              onApply={(suggestion) => applyMeasureAutocomplete(part.id, measureIndex, suggestion)}
+                            />
+                          ) : null}
                           {settings.previewEnabled && measurePreviewRows.length > 0 ? (
                             <div className="measure-card__token-overlay">
                               {measurePreviewRows.map((row) => (
@@ -2052,7 +2436,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-        © TSK · v1.1.3
+        © TSK · v1.2.0
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}
