@@ -60,6 +60,7 @@ interface PersistedState {
   parts: ChartPart[];
   settings: ExportSettings;
   chartFormat?: ChartTextFormat;
+  autoFormatChart?: boolean;
 }
 
 interface BuilderState {
@@ -430,6 +431,49 @@ function getMeasureInputFontSize(value: string): CSSProperties | undefined {
   };
 }
 
+function getChartTextareaFontSize(value: string): CSSProperties | undefined {
+  const lines = value.split("\n");
+  const longestLineLength = lines.reduce((max, line) => Math.max(max, line.length), 0);
+  const denseLineCount = lines.filter((line) => line.trim().length > 0).length;
+  let fontSize = 0.85;
+
+  if (longestLineLength >= 34) {
+    fontSize -= 0.04;
+  }
+
+  if (longestLineLength >= 42) {
+    fontSize -= 0.05;
+  }
+
+  if (longestLineLength >= 52) {
+    fontSize -= 0.06;
+  }
+
+  if (longestLineLength >= 64) {
+    fontSize -= 0.05;
+  }
+
+  if (longestLineLength >= 76) {
+    fontSize -= 0.04;
+  }
+
+  if (denseLineCount >= 8) {
+    fontSize -= 0.02;
+  }
+
+  if (denseLineCount >= 12) {
+    fontSize -= 0.03;
+  }
+
+  if (denseLineCount >= 16) {
+    fontSize -= 0.03;
+  }
+
+  return {
+    fontSize: `${Math.max(0.54, fontSize)}rem`,
+  };
+}
+
 function normalizePersistedState(): PersistedState {
   if (typeof window === "undefined") {
     return {
@@ -437,6 +481,7 @@ function normalizePersistedState(): PersistedState {
       parts: createDefaultParts(),
       settings: DEFAULT_SETTINGS,
       chartFormat: "generic",
+      autoFormatChart: true,
     };
   }
 
@@ -448,6 +493,7 @@ function normalizePersistedState(): PersistedState {
         parts: createDefaultParts(),
         settings: DEFAULT_SETTINGS,
         chartFormat: "generic",
+        autoFormatChart: true,
       };
     }
 
@@ -478,6 +524,7 @@ function normalizePersistedState(): PersistedState {
         previewVolume: parsed.settings?.previewVolume ?? DEFAULT_SETTINGS.previewVolume,
       },
       chartFormat: parsed.chartFormat === "chordwiki" ? "chordwiki" : "generic",
+      autoFormatChart: parsed.autoFormatChart ?? true,
     };
   } catch {
     return {
@@ -485,6 +532,7 @@ function normalizePersistedState(): PersistedState {
       parts: createDefaultParts(),
       settings: DEFAULT_SETTINGS,
       chartFormat: "generic",
+      autoFormatChart: true,
     };
   }
 }
@@ -501,6 +549,7 @@ function ChartTextarea({
   placeholder: string;
 }) {
   const backdropRef = useRef<HTMLDivElement>(null);
+  const dynamicFontStyle = getChartTextareaFontSize(value);
 
   const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
     if (backdropRef.current) {
@@ -524,11 +573,12 @@ function ChartTextarea({
 
   return (
     <div className="syntax-container">
-      <div className="syntax-backdrop chart-textarea" ref={backdropRef} aria-hidden="true">
+      <div className="syntax-backdrop chart-textarea" ref={backdropRef} style={dynamicFontStyle} aria-hidden="true">
         {finalHighlighted}
       </div>
       <textarea
         className="syntax-textarea chart-textarea"
+        style={dynamicFontStyle}
         value={value}
         onChange={(event) => onValueChange(event.target.value)}
         onBlur={() => onBlur()}
@@ -906,7 +956,7 @@ function App() {
   const [chartDraft, setChartDraft] = useState<string>(
     serializeChart(persisted.parts, persisted.chartFormat ?? "generic"),
   );
-  const [autoFormatChart, setAutoFormatChart] = useState(false);
+  const [autoFormatChart, setAutoFormatChart] = useState(persisted.autoFormatChart ?? true);
   const [chartSource, setChartSource] = useState<"grid" | "text">("grid");
   const [selectedMeasure, setSelectedMeasure] = useState({
     partId: persisted.parts[0]?.id ?? "",
@@ -947,7 +997,6 @@ function App() {
   const toastTimerRef = useRef<number | null>(null);
   const previewTimerRef = useRef<number | null>(null);
   const caretRestoreFrameRef = useRef<number | null>(null);
-  const previousInstalledRef = useRef<boolean | null>(null);
   const [playingPreviewId, setPlayingPreviewId] = useState<string | null>(null);
 
   const showToast = useEffectEvent((message: string) => {
@@ -981,9 +1030,10 @@ function App() {
         parts,
         settings,
         chartFormat,
+        autoFormatChart,
       }),
     );
-  }, [mode, parts, settings, chartFormat]);
+  }, [mode, parts, settings, chartFormat, autoFormatChart]);
 
   useEffect(() => {
     window.localStorage.setItem(UI_SCALE_STORAGE_KEY, String(manualScale));
@@ -1048,19 +1098,6 @@ function App() {
       setPwaInstallState(state);
     });
   }, []);
-
-  useEffect(() => {
-    if (previousInstalledRef.current === null) {
-      previousInstalledRef.current = pwaInstallState.isInstalled;
-      return;
-    }
-
-    if (!previousInstalledRef.current && pwaInstallState.isInstalled) {
-      showToast("앱 설치가 완료되었습니다.");
-    }
-
-    previousInstalledRef.current = pwaInstallState.isInstalled;
-  }, [pwaInstallState.isInstalled, showToast]);
 
   useEffect(() => {
     const activePart = parts.find((part) => part.id === selectedMeasure.partId) ?? parts[0];
@@ -2570,7 +2607,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-        © TSK · v1.2.6
+        © TSK · v1.2.7
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}

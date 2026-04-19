@@ -164,31 +164,24 @@ function buildBaseSuggestions(
   const rootOptions = getRootOptions(mode, key);
   const normalizedToken = token.toLowerCase();
 
-  let completedRoot: string | null = null;
-  for (const root of rootOptions) {
-    if (!normalizedToken.startsWith(root.toLowerCase())) {
-      continue;
-    }
+  const matchingRoots = rootOptions
+    .filter((root) => normalizedToken.startsWith(root.toLowerCase()))
+    .sort((left, right) => right.length - left.length);
 
-    if (!completedRoot || root.length > completedRoot.length) {
-      completedRoot = root;
-    }
-  }
-
-  if (completedRoot) {
-    const suffixQuery = token.slice(completedRoot.length);
+  for (const root of matchingRoots) {
+    const suffixQuery = token.slice(root.length);
     const suggestions = BASE_CHORD_OPTIONS.filter((option) => option.suffix.startsWith(suffixQuery)).map((option) => ({
-      value: `${completedRoot}${option.suffix}`,
-      label: `${completedRoot}${option.suffix}`,
+      value: `${root}${option.suffix}`,
+      label: `${root}${option.suffix}`,
       detail: option.detail,
     }));
 
-    return suggestions.length > 0
-      ? {
-          kind: "quality",
-          suggestions,
-        }
-      : null;
+    if (suggestions.length > 0) {
+      return {
+        kind: "quality",
+        suggestions,
+      };
+    }
   }
 
   const suggestions = rootOptions
