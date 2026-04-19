@@ -2570,7 +2570,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-        © TSK · v1.2.4
+        © TSK · v1.2.5
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}
