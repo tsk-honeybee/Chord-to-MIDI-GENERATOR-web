@@ -1,0 +1,40 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" fill="url(#bg)" />
+  <rect x="26" y="26" width="972" height="972" rx="238" fill="url(#frame)" stroke="rgba(255,255,255,0.10)" stroke-width="8" />
+  <rect x="58" y="58" width="908" height="908" rx="214" stroke="rgba(255,255,255,0.05)" stroke-width="8" />
+  <g transform="translate(66 34)">
+    <rect x="142" y="110" width="624" height="704" rx="128" fill="rgba(8, 16, 28, 0.9)" stroke="rgba(255,255,255,0.13)" stroke-width="8" />
+    <path d="M270 110V814" stroke="rgba(255,255,255,0.11)" stroke-width="8" />
+    <path d="M398 110V814" stroke="rgba(255,255,255,0.08)" stroke-width="8" />
+    <path d="M526 110V814" stroke="rgba(255,255,255,0.08)" stroke-width="8" />
+    <path d="M654 110V814" stroke="rgba(255,255,255,0.08)" stroke-width="8" />
+    <path d="M176 274H732" stroke="rgba(255,255,255,0.12)" stroke-width="8" />
+    <path d="M176 450H732" stroke="rgba(255,255,255,0.12)" stroke-width="8" />
+    <path d="M176 626H732" stroke="rgba(255,255,255,0.12)" stroke-width="8" />
+    <rect x="18" y="294" width="214" height="392" rx="107" fill="rgba(143,225,215,0.16)" stroke="rgba(143,225,215,0.40)" stroke-width="12" />
+    <rect x="102" y="154" width="96" height="430" rx="48" fill="#8FE1D7" />
+    <rect x="34" y="212" width="96" height="512" rx="48" fill="#DCFDF7" />
+    <circle cx="462" cy="272" r="54" fill="#F3F6FD" />
+    <circle cx="590" cy="272" r="54" fill="#9AE4DD" />
+    <circle cx="718" cy="272" r="54" fill="#F5B065" />
+    <circle cx="462" cy="450" r="54" fill="#F3F6FD" />
+    <circle cx="590" cy="450" r="54" fill="#8FA5FF" />
+    <circle cx="718" cy="450" r="54" fill="#F3F6FD" />
+    <circle cx="462" cy="628" r="54" fill="#9AE4DD" />
+    <circle cx="590" cy="628" r="54" fill="#F3F6FD" />
+    <circle cx="718" cy="628" r="54" fill="#8FA5FF" />
+    <path d="M462 272H590H718" stroke="rgba(255,255,255,0.24)" stroke-width="24" stroke-linecap="round" />
+    <path d="M462 450H590H718" stroke="rgba(255,255,255,0.22)" stroke-width="24" stroke-linecap="round" />
+    <path d="M462 628H590H718" stroke="rgba(255,255,255,0.22)" stroke-width="24" stroke-linecap="round" />
+  </g>
+  <defs>
+    <linearGradient id="bg" x1="78" y1="48" x2="934" y2="984" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4C5064" />
+      <stop offset="1" stop-color="#2A2D39" />
+    </linearGradient>
+    <linearGradient id="frame" x1="512" y1="26" x2="512" y2="998" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#64687F" />
+      <stop offset="1" stop-color="#3C404D" />
+    </linearGradient>
+  </defs>
+</svg>

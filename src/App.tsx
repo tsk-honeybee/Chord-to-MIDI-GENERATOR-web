@@ -46,7 +46,14 @@ import {
   type ChordAutocompleteSuggestion,
 } from "./lib/chordAutocomplete";
 import { downloadBlob, exportChartToMidi } from "./lib/midi";
-import { applyPwaUpdate, subscribeToPwaRefresh } from "./lib/pwa";
+import {
+  applyPwaUpdate,
+  requestPwaInstall,
+  type PwaManualInstallMode,
+  subscribeToPwaInstallState,
+  subscribeToPwaRefresh,
+  type PwaInstallState,
+} from "./lib/pwa";
 
 interface PersistedState {
   mode: NotationMode;
@@ -187,6 +194,34 @@ const HELP_CHART_EXAMPLE = `[intro] (Key:C)
 [A] (Key:Eb)
 | Eb     | %          | AbM7   | Abm7  |
 | Eb     | Eb Eb/Ab   | AbM7   | Abm7  |`;
+const INITIAL_PWA_INSTALL_STATE: PwaInstallState = {
+  canInstall: false,
+  isInstalled: false,
+  manualInstallMode: null,
+  browserFamily: "other",
+};
+const INSTALL_FAILURE_MESSAGE = "설치가 실패했습니다.\n이미 앱이 설치가 되어있을 가능성이 있습니다.";
+const INSTALL_UNSUPPORTED_MESSAGE = "현재 브라우저에서는 앱 설치를 지원하지 않습니다.";
+
+function getSafariInstallGuide(mode: PwaManualInstallMode) {
+  if (mode === "ios-safari") {
+    return {
+      title: "Safari에서 홈 화면에 추가",
+      message:
+        "1. Safari 하단 또는 상단의 공유 버튼을 누르세요.\n2. 메뉴에서 '홈 화면에 추가'를 선택하세요.\n3. 이름을 확인한 뒤 '추가'를 누르면 앱처럼 실행됩니다.",
+    };
+  }
+
+  if (mode === "macos-safari") {
+    return {
+      title: "Safari에서 Dock에 추가",
+      message:
+        "1. Safari 메뉴 막대에서 '파일'을 여세요.\n2. 'Dock에 추가'를 선택하세요.\n3. 이름을 확인한 뒤 추가하면 Dock과 Launchpad에서 앱처럼 실행할 수 있습니다.",
+    };
+  }
+
+  return null;
+}
 
 function renderHighlightedText(text: string) {
   const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g).filter(Boolean);
@@ -283,10 +318,10 @@ function buildPreviewRow(
   const resolvedToken =
     token === "%"
       ? resolveChordToken(parts, {
-          partId: selectedMeasure.partId,
-          measureIndex: selectedMeasure.measureIndex,
-          tokenIndex,
-        })
+        partId: selectedMeasure.partId,
+        measureIndex: selectedMeasure.measureIndex,
+        tokenIndex,
+      })
       : token;
 
   if (!resolvedToken) {
@@ -546,7 +581,7 @@ function KeyDropdown({ value, onChange }: { value: KeyName; onChange: (v: KeyNam
     // Submenu is to the right. We check if the slope points into the submenu area.
     // This is a simplified version of the Amazon algorithm.
     const isMovingRight = loc.x > prevLoc.x;
-    
+
     if (isMovingRight) {
       // Moving toward submenu, delay the switch
       timeoutRef.current = setTimeout(() => {
@@ -582,11 +617,11 @@ function KeyDropdown({ value, onChange }: { value: KeyName; onChange: (v: KeyNam
       </button>
 
       {isOpen && (
-        <div 
-          className="custom-dropdown__menu" 
+        <div
+          className="custom-dropdown__menu"
           onMouseMove={handleMouseMove}
         >
-          <div 
+          <div
             className={`custom-dropdown__item has-submenu ${activeMenu === "major" ? "is-active" : ""}`}
             onMouseEnter={() => handleItemMouseEnter("major")}
           >
@@ -610,7 +645,7 @@ function KeyDropdown({ value, onChange }: { value: KeyName; onChange: (v: KeyNam
               </div>
             )}
           </div>
-          <div 
+          <div
             className={`custom-dropdown__item has-submenu ${activeMenu === "minor" ? "is-active" : ""}`}
             onMouseEnter={() => handleItemMouseEnter("minor")}
           >
@@ -702,9 +737,8 @@ function GridDropdown({
                 <button
                   key={option}
                   type="button"
-                  className={`custom-dropdown__option custom-dropdown__option--grid ${
-                    option === value ? "is-selected" : ""
-                  }`}
+                  className={`custom-dropdown__option custom-dropdown__option--grid ${option === value ? "is-selected" : ""
+                    }`}
                   onClick={() => {
                     onChange(option);
                     setIsOpen(false);
@@ -821,11 +855,9 @@ function MeasureAutocompleteMenu({
 
   return (
     <div
-      className={`measure-card__autocomplete ${
-        scrollState.isScrollable ? "is-scrollable" : ""
-      } ${scrollState.canScrollUp ? "can-scroll-up" : ""} ${
-        scrollState.canScrollDown ? "can-scroll-down" : ""
-      }`}
+      className={`measure-card__autocomplete ${scrollState.isScrollable ? "is-scrollable" : ""
+        } ${scrollState.canScrollUp ? "can-scroll-up" : ""} ${scrollState.canScrollDown ? "can-scroll-down" : ""
+        }`}
       id={menuId}
       role="listbox"
       aria-label="코드 자동완성"
@@ -839,9 +871,8 @@ function MeasureAutocompleteMenu({
             role="option"
             aria-selected={autocomplete.activeIndex === index}
             tabIndex={-1}
-            className={`measure-card__autocomplete-option ${
-              autocomplete.activeIndex === index ? "is-active" : ""
-            }`}
+            className={`measure-card__autocomplete-option ${autocomplete.activeIndex === index ? "is-active" : ""
+              }`}
             onMouseEnter={() => onHover(index)}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onApply(suggestion)}
@@ -894,6 +925,8 @@ function App() {
   const [dialogState, setDialogState] = useState<AppDialogState | null>(null);
   const [isUpdateReady, setIsUpdateReady] = useState(false);
   const [isApplyingUpdate, setIsApplyingUpdate] = useState(false);
+  const [pwaInstallState, setPwaInstallState] = useState<PwaInstallState>(INITIAL_PWA_INSTALL_STATE);
+  const [isInstallingApp, setIsInstallingApp] = useState(false);
   const [measureAutocomplete, setMeasureAutocomplete] = useState<MeasureAutocompleteState | null>(null);
   const [manualScale, setManualScale] = useState<number>(() => {
     if (typeof window === "undefined") {
@@ -914,6 +947,7 @@ function App() {
   const toastTimerRef = useRef<number | null>(null);
   const previewTimerRef = useRef<number | null>(null);
   const caretRestoreFrameRef = useRef<number | null>(null);
+  const previousInstalledRef = useRef<boolean | null>(null);
   const [playingPreviewId, setPlayingPreviewId] = useState<string | null>(null);
 
   const showToast = useEffectEvent((message: string) => {
@@ -1010,6 +1044,25 @@ function App() {
   }, []);
 
   useEffect(() => {
+    return subscribeToPwaInstallState((state) => {
+      setPwaInstallState(state);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (previousInstalledRef.current === null) {
+      previousInstalledRef.current = pwaInstallState.isInstalled;
+      return;
+    }
+
+    if (!previousInstalledRef.current && pwaInstallState.isInstalled) {
+      showToast("앱 설치가 완료되었습니다.");
+    }
+
+    previousInstalledRef.current = pwaInstallState.isInstalled;
+  }, [pwaInstallState.isInstalled, showToast]);
+
+  useEffect(() => {
     const activePart = parts.find((part) => part.id === selectedMeasure.partId) ?? parts[0];
     if (!activePart) {
       return;
@@ -1053,6 +1106,17 @@ function App() {
     selectedPartIndex >= 0 &&
     (selectedPartIndex < parts.length - 1 ||
       selectedMeasure.measureIndex < (selectedPart?.measures.length ?? 1) - 1);
+  const canUseInstallButton = pwaInstallState.canInstall || pwaInstallState.manualInstallMode !== null;
+  const installButtonLabel = pwaInstallState.isInstalled ? "앱 설치됨" : "앱 설치";
+  const installButtonTitle = pwaInstallState.isInstalled
+    ? "앱이 이미 설치되어 있습니다."
+    : pwaInstallState.canInstall
+      ? "이 기기에 앱을 설치합니다."
+      : pwaInstallState.manualInstallMode === "ios-safari"
+        ? "Safari에서 홈 화면에 추가할 수 있습니다."
+        : pwaInstallState.manualInstallMode === "macos-safari"
+          ? "Safari에서 Dock에 추가할 수 있습니다."
+          : "현재 브라우저에서는 설치 프롬프트를 바로 열 수 없습니다.";
 
   const previewRows: PreviewRow[] = selectedMeasureTokens.map((token, tokenIndex) =>
     buildPreviewRow(parts, selectedMeasure, selectedKey, settings, mode, token, tokenIndex),
@@ -1131,9 +1195,9 @@ function App() {
       measureIndex,
       activeIndex:
         current?.partId === partId &&
-        current.measureIndex === measureIndex &&
-        current.token === nextMatch.token &&
-        current.kind === nextMatch.kind
+          current.measureIndex === measureIndex &&
+          current.token === nextMatch.token &&
+          current.kind === nextMatch.kind
           ? Math.min(current.activeIndex, nextMatch.suggestions.length - 1)
           : 0,
     }));
@@ -1198,9 +1262,9 @@ function App() {
       setMeasureAutocomplete((current) =>
         current && current.partId === partId && current.measureIndex === measureIndex
           ? {
-              ...current,
-              activeIndex: (current.activeIndex + 1) % current.suggestions.length,
-            }
+            ...current,
+            activeIndex: (current.activeIndex + 1) % current.suggestions.length,
+          }
           : current,
       );
       return;
@@ -1211,9 +1275,9 @@ function App() {
       setMeasureAutocomplete((current) =>
         current && current.partId === partId && current.measureIndex === measureIndex
           ? {
-              ...current,
-              activeIndex: (current.activeIndex - 1 + current.suggestions.length) % current.suggestions.length,
-            }
+            ...current,
+            activeIndex: (current.activeIndex - 1 + current.suggestions.length) % current.suggestions.length,
+          }
           : current,
       );
       return;
@@ -1475,6 +1539,57 @@ function App() {
     }
   });
 
+  const handleInstallApp = useEffectEvent(async () => {
+    if (pwaInstallState.isInstalled) {
+      showToast("앱이 이미 설치되어 있습니다.");
+      return;
+    }
+
+    if (pwaInstallState.canInstall) {
+      try {
+        setIsInstallingApp(true);
+        const outcome = await requestPwaInstall();
+
+        if (outcome === "accepted") {
+          showToast("설치 확인 후 앱으로 추가할 수 있습니다.");
+          return;
+        }
+
+        if (outcome === "dismissed") {
+          showToast("앱 설치가 취소되었습니다.");
+          return;
+        }
+
+        showToast(INSTALL_FAILURE_MESSAGE);
+      } catch (error) {
+        console.error(error);
+        showToast(INSTALL_FAILURE_MESSAGE);
+      } finally {
+        setIsInstallingApp(false);
+      }
+
+      return;
+    }
+
+    const manualInstallGuide = getSafariInstallGuide(pwaInstallState.manualInstallMode);
+    if (manualInstallGuide) {
+      setDialogState({
+        title: manualInstallGuide.title,
+        message: manualInstallGuide.message,
+        actions: [
+          {
+            label: "확인",
+            variant: "primary",
+            onClick: () => setDialogState(null),
+          },
+        ],
+      });
+      return;
+    }
+
+    showToast(pwaInstallState.browserFamily === "chromium" ? INSTALL_FAILURE_MESSAGE : INSTALL_UNSUPPORTED_MESSAGE);
+  });
+
   const handleExportMidi = () => {
     try {
       const blob = exportChartToMidi(parts, settings);
@@ -1654,31 +1769,50 @@ function App() {
           />
         </div>
 
-        <div className="topbar__zoom">
+        <div className="topbar__tools">
           <button
-            className="button button--ghost button--small"
-            onClick={() => setManualScale((current) => Math.max(0.7, Number((current - 0.05).toFixed(2))))}
-            aria-label="배율 축소"
-            title="배율 축소"
+            className={`button button--ghost button--install ${canUseInstallButton ? "is-ready" : ""
+              } ${pwaInstallState.isInstalled ? "is-installed" : ""}`}
+            onClick={() => void handleInstallApp()}
+            disabled={isInstallingApp}
+            title={installButtonTitle}
+            aria-label={installButtonTitle}
           >
-            -
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 3.98a1 1 0 0 1-1.4 0l-4-3.98a1 1 0 0 1 1.4-1.42L11 12.59V4a1 1 0 0 1 1-1Zm-7 14a1 1 0 0 1 1 1v1h12v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z"
+                fill="currentColor"
+              />
+            </svg>
+            <span>{isInstallingApp ? "설치 준비 중..." : installButtonLabel}</span>
           </button>
-          <button
-            className="button button--ghost button--small"
-            onClick={() => setManualScale(1)}
-            aria-label="기본 배율"
-            title="기본 배율"
-          >
-            {Math.round(manualScale * 100)}%
-          </button>
-          <button
-            className="button button--ghost button--small"
-            onClick={() => setManualScale((current) => Math.min(1.35, Number((current + 0.05).toFixed(2))))}
-            aria-label="배율 확대"
-            title="배율 확대"
-          >
-            +
-          </button>
+
+          <div className="topbar__zoom">
+            <button
+              className="button button--ghost button--small"
+              onClick={() => setManualScale((current) => Math.max(0.7, Number((current - 0.05).toFixed(2))))}
+              aria-label="배율 축소"
+              title="배율 축소"
+            >
+              -
+            </button>
+            <button
+              className="button button--ghost button--small"
+              onClick={() => setManualScale(1)}
+              aria-label="기본 배율"
+              title="기본 배율"
+            >
+              {Math.round(manualScale * 100)}%
+            </button>
+            <button
+              className="button button--ghost button--small"
+              onClick={() => setManualScale((current) => Math.min(1.35, Number((current + 0.05).toFixed(2))))}
+              aria-label="배율 확대"
+              title="배율 확대"
+            >
+              +
+            </button>
+          </div>
         </div>
       </header>
 
@@ -1952,11 +2086,9 @@ function App() {
                       return (
                         <label
                           key={`${part.id}-${measureIndex}`}
-                          className={`measure-card ${isSelected ? "is-selected" : ""} ${
-                            settings.previewEnabled ? "measure-card--preview" : ""
-                          } ${
-                            measure.trim().toLowerCase() === "x" ? "is-muted" : ""
-                          }`}
+                          className={`measure-card ${isSelected ? "is-selected" : ""} ${settings.previewEnabled ? "measure-card--preview" : ""
+                            } ${measure.trim().toLowerCase() === "x" ? "is-muted" : ""
+                            }`}
                           onClick={() => setSelectedMeasure({ partId: part.id, measureIndex })}
                         >
                           <span className="measure-card__index">#{measureIndex + 1}</span>
@@ -2041,9 +2173,8 @@ function App() {
                                 <button
                                   key={row.id}
                                   type="button"
-                                  className={`measure-card__token-button ${
-                                    playingPreviewId === row.id ? "is-playing" : ""
-                                  }`}
+                                  className={`measure-card__token-button ${playingPreviewId === row.id ? "is-playing" : ""
+                                    }`}
                                   style={getMeasureTokenFontSize(row.label, measurePreviewRows.length)}
                                   disabled={row.midiNotes.length === 0}
                                   onPointerDown={(event) => {
@@ -2106,17 +2237,15 @@ function App() {
                 previewRows.map((row) => (
                   <article
                     key={row.id}
-                    className={`preview-card preview-card--${row.status} ${
-                      playingPreviewId === row.id ? "is-playing" : ""
-                    }`}
+                    className={`preview-card preview-card--${row.status} ${playingPreviewId === row.id ? "is-playing" : ""
+                      }`}
                   >
                     <div className="preview-card__header">
                       <div className="preview-card__top">
                         <button
                           type="button"
-                          className={`preview-card__name-button ${
-                            settings.previewEnabled && row.midiNotes.length > 0 ? "is-enabled" : ""
-                          }`}
+                          className={`preview-card__name-button ${settings.previewEnabled && row.midiNotes.length > 0 ? "is-enabled" : ""
+                            }`}
                           onClick={() => handlePreviewNameClick(row)}
                           disabled={!settings.previewEnabled || row.midiNotes.length === 0}
                           aria-label={`${row.label} 코드 이름`}
@@ -2131,9 +2260,8 @@ function App() {
                         <span>{row.detail}</span>
                       </div>
                       <button
-                        className={`button button--ghost button--small preview-card__play-button ${
-                          playingPreviewId === row.id ? "is-playing" : ""
-                        }`}
+                        className={`button button--ghost button--small preview-card__play-button ${playingPreviewId === row.id ? "is-playing" : ""
+                          }`}
                         onClick={() => handlePreviewChord(row)}
                         disabled={row.midiNotes.length === 0}
                         aria-label={`${row.label} 코드 프리뷰 ${playingPreviewId === row.id ? "정지" : "재생"}`}
@@ -2226,11 +2354,11 @@ function App() {
                       disabled
                         ? undefined
                         : setBuilder((current) => ({
-                            ...current,
-                            tensions: active
-                              ? current.tensions.filter((entry) => entry !== tension)
-                              : [...current.tensions, tension],
-                          }))
+                          ...current,
+                          tensions: active
+                            ? current.tensions.filter((entry) => entry !== tension)
+                            : [...current.tensions, tension],
+                        }))
                     }
                   >
                     {tension === "add9" ? "9" : tension}
@@ -2387,7 +2515,7 @@ function App() {
                 <h3>텍스트 차트 파일(.txt) 규칙</h3>
                 <p>
                   {renderHighlightedText(
-  "저장된 텍스트 차트는 `TXT 불러오기` 또는 `텍스트 차트` 패널에서 다시 가져올 수 있습니다.",
+                    "저장된 텍스트 차트는 `TXT 불러오기` 또는 `텍스트 차트` 패널에서 다시 가져올 수 있습니다.",
                   )}
                 </p>
                 <ul className="help-list">
@@ -2442,7 +2570,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-        © TSK · v1.2.3
+        © TSK · v1.2.4
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}

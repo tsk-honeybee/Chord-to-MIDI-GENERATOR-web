@@ -1,5 +1,3 @@
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css");
-
 :root {
   color-scheme: dark;
   font-family: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
@@ -302,11 +300,19 @@ button:disabled::before {
   overflow: hidden;
 }
 
+.editor-toolbar {
+  --toolbar-gap: clamp(6px, 0.7vw, 10px);
+  --toolbar-control-px: var(--control-px);
+  --toolbar-control-gap: var(--control-gap);
+  --toolbar-segment-min: clamp(40px, 4.2vw, 72px);
+  --toolbar-segment-font: clamp(0.76rem, 0.82vw, 0.94rem);
+}
+
 .editor-toolbar__main {
   flex-wrap: nowrap;
   align-items: flex-end;
   justify-content: flex-start;
-  gap: clamp(6px, 0.7vw, 10px);
+  gap: var(--toolbar-gap);
   min-width: 0;
 }
 
@@ -314,7 +320,7 @@ button:disabled::before {
 .editor-toolbar__option-toggles {
   display: flex;
   align-items: flex-end;
-  gap: clamp(6px, 0.7vw, 10px);
+  gap: var(--toolbar-gap);
   min-width: 0;
 }
 
@@ -363,6 +369,13 @@ button:disabled::before {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
+}
+
+.topbar__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   flex: 0 0 auto;
 }
 
@@ -547,7 +560,7 @@ button:disabled::before {
 .part-title-input {
   min-height: var(--control-h);
   height: var(--control-h);
-  padding: 0 var(--control-px);
+  padding: 0 var(--toolbar-control-px, var(--control-px));
   border-radius: var(--radius-sm);
 }
 
@@ -571,7 +584,7 @@ button:disabled::before {
 }
 
 .toggle--compact span {
-  font-size: clamp(0.72rem, 0.72vw, 0.9rem);
+  font-size: var(--toolbar-compact-font, clamp(0.72rem, 0.72vw, 0.9rem));
 }
 
 .field--compact select {
@@ -587,7 +600,7 @@ button:disabled::before {
   width: 52px;
   min-width: 52px;
   max-width: 52px;
-  padding-inline: 8px;
+  padding-inline: var(--toolbar-octave-px, 8px);
 }
 
 .field--preview-volume {
@@ -1350,10 +1363,10 @@ button:disabled::before {
 .toggle {
   display: inline-flex;
   align-items: center;
-  gap: var(--control-gap);
+  gap: var(--toolbar-control-gap, var(--control-gap));
   min-height: var(--control-h);
   height: var(--control-h);
-  padding: 0 var(--control-px);
+  padding: 0 var(--toolbar-control-px, var(--control-px));
   position: relative;
   isolation: isolate;
   border-radius: 999px;
@@ -1366,9 +1379,9 @@ button:disabled::before {
 .toggle--compact {
   min-height: var(--control-h);
   height: var(--control-h);
-  padding: 0 var(--control-px);
+  padding: 0 var(--toolbar-control-px, var(--control-px));
   border-radius: var(--radius-sm);
-  gap: var(--control-gap);
+  gap: var(--toolbar-control-gap, var(--control-gap));
   flex: 0 1 auto;
   min-width: 0;
 }
@@ -1393,14 +1406,14 @@ button:disabled::before {
 }
 
 .segmented button {
-  min-width: clamp(40px, 4.2vw, 72px);
+  min-width: var(--toolbar-segment-min);
   min-height: 30px;
-  padding: 6px 6px;
+  padding: 6px var(--toolbar-segment-px, 6px);
   border: 0;
   border-radius: calc(var(--radius-sm) - 4px);
   color: var(--muted);
   background: transparent;
-  font-size: clamp(0.76rem, 0.82vw, 0.94rem);
+  font-size: var(--toolbar-segment-font);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -1409,6 +1422,51 @@ button:disabled::before {
   color: white;
   background: linear-gradient(180deg, #91abff, #6f8ff5);
   box-shadow: 0 8px 16px rgba(111, 143, 245, 0.22);
+}
+
+.app-shell[style*="--manual-scale: 1.1"] .editor-toolbar,
+.app-shell[style*="--manual-scale: 1.15"] .editor-toolbar,
+.app-shell[style*="--manual-scale: 1.2"] .editor-toolbar,
+.app-shell[style*="--manual-scale: 1.25"] .editor-toolbar,
+.app-shell[style*="--manual-scale: 1.3"] .editor-toolbar,
+.app-shell[style*="--manual-scale: 1.35"] .editor-toolbar,
+.app-shell[style*="--manual-scale: 1.4"] .editor-toolbar {
+  --toolbar-gap: 6px;
+  --toolbar-control-px: 10px;
+  --toolbar-control-gap: 8px;
+  --toolbar-segment-min: 34px;
+  --toolbar-segment-px: 4px;
+  --toolbar-segment-font: 0.86rem;
+  --toolbar-compact-font: clamp(0.68rem, 0.62vw, 0.84rem);
+  --toolbar-octave-px: 6px;
+}
+
+.app-shell[style*="--manual-scale: 1.2"] .editor-toolbar,
+.app-shell[style*="--manual-scale: 1.25"] .editor-toolbar,
+.app-shell[style*="--manual-scale: 1.3"] .editor-toolbar,
+.app-shell[style*="--manual-scale: 1.35"] .editor-toolbar,
+.app-shell[style*="--manual-scale: 1.4"] .editor-toolbar {
+  --toolbar-gap: 5px;
+  --toolbar-control-px: 8px;
+  --toolbar-control-gap: 6px;
+  --toolbar-segment-min: 30px;
+  --toolbar-segment-px: 3px;
+  --toolbar-segment-font: 0.8rem;
+  --toolbar-compact-font: clamp(0.64rem, 0.56vw, 0.8rem);
+  --toolbar-octave-px: 5px;
+}
+
+.app-shell[style*="--manual-scale: 1.3"] .editor-toolbar,
+.app-shell[style*="--manual-scale: 1.35"] .editor-toolbar,
+.app-shell[style*="--manual-scale: 1.4"] .editor-toolbar {
+  --toolbar-gap: 4px;
+  --toolbar-control-px: 7px;
+  --toolbar-control-gap: 5px;
+  --toolbar-segment-min: 28px;
+  --toolbar-segment-px: 2px;
+  --toolbar-segment-font: 0.76rem;
+  --toolbar-compact-font: clamp(0.6rem, 0.5vw, 0.76rem);
+  --toolbar-octave-px: 4px;
 }
 
 .button {
@@ -1469,6 +1527,33 @@ button:disabled::before {
   height: 34px;
   padding: 0 10px;
   font-size: 0.88rem;
+}
+
+.button--install {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 132px;
+  gap: 8px;
+  padding-inline: 14px;
+}
+
+.button--install svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+.button--install.is-ready {
+  color: #eff5ff;
+  background: linear-gradient(180deg, rgba(49, 77, 142, 0.98), rgba(33, 55, 103, 0.98));
+  border: 1px solid rgba(151, 180, 255, 0.32);
+  box-shadow: 0 12px 26px rgba(31, 55, 104, 0.22);
+}
+
+.button--install.is-installed {
+  color: var(--secondary);
+  border-color: rgba(143, 225, 215, 0.2);
 }
 
 .part-card__actions .button,
@@ -1763,6 +1848,7 @@ button:disabled::before {
   position: fixed;
   right: 22px;
   bottom: 22px;
+  z-index: 10001;
   padding: 14px 18px;
   border-radius: 14px;
   color: white;
@@ -2039,6 +2125,11 @@ html {
 
   .topbar__zoom {
     flex: 0 0 auto;
+    justify-content: flex-start;
+  }
+
+  .topbar__tools {
+    flex-wrap: wrap;
     justify-content: flex-start;
   }
 
