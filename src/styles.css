@@ -468,6 +468,43 @@ button:disabled::before {
   width: 100%;
 }
 
+.collapsible-panel__header {
+  min-width: 0;
+}
+
+.collapsible-panel__header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.collapsible-panel.is-collapsed .panel__header {
+  margin-bottom: 0;
+}
+
+.collapsible-panel__body {
+  min-width: 0;
+}
+
+.panel-collapse-button {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 10px;
+  gap: 4px;
+}
+
+.panel-collapse-button svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 160ms ease;
+}
+
+.panel-collapse-button.is-collapsed svg {
+  transform: rotate(-90deg);
+}
+
 .parts-stack {
   display: flex;
   flex-direction: column;
@@ -1082,6 +1119,10 @@ button:disabled::before {
   margin-bottom: 8px;
 }
 
+.panel--builder.is-collapsed .panel__header {
+  margin-bottom: 0;
+}
+
 .panel--selection {
   padding-top: 16px;
   position: relative;
@@ -1098,7 +1139,8 @@ button:disabled::before {
 .syntax-container {
   position: relative;
   width: 100%;
-  min-height: 280px;
+  min-height: var(--chart-textarea-min-height, 180px);
+  height: var(--chart-textarea-height, 280px);
 }
 
 .syntax-backdrop {
@@ -1372,6 +1414,15 @@ button:disabled::before {
   text-align: center;
 }
 
+.custom-dropdown__menu--quality .custom-dropdown__grid {
+  grid-template-columns: repeat(var(--dropdown-columns, 3), minmax(48px, 60px));
+  gap: 4px;
+}
+
+.custom-dropdown__menu--quality .custom-dropdown__option--grid {
+  padding-inline: 5px;
+}
+
 .custom-dropdown__spacer {
   min-height: 30px;
 }
@@ -1398,6 +1449,15 @@ button:disabled::before {
     letter-spacing: -0.03em;
   }
 
+  .custom-dropdown__menu--quality .custom-dropdown__grid {
+    grid-template-columns: repeat(var(--dropdown-columns, 3), minmax(44px, 55px));
+    gap: 2px;
+  }
+
+  .custom-dropdown__menu--quality .custom-dropdown__option--grid {
+    padding-inline: 4px;
+  }
+
   .custom-dropdown__spacer {
     min-height: 29px;
   }
@@ -1411,7 +1471,7 @@ button:disabled::before {
 
 .chart-textarea {
   width: 100%;
-  height: 280px;
+  height: 100%;
   padding: 14px;
   resize: none;
   line-height: 1.6;
@@ -1424,6 +1484,45 @@ button:disabled::before {
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: rgba(111, 146, 255, 0.42) rgba(255, 255, 255, 0.04);
+}
+
+.chart-resize-shell {
+  --chart-textarea-min-height: 180px;
+}
+
+.chart-resize-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 18px;
+  margin-top: 8px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(172, 190, 220, 0.12), rgba(172, 190, 220, 0.04)),
+    rgba(8, 13, 22, 0.72);
+  color: rgba(210, 222, 242, 0.72);
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.chart-resize-handle:hover {
+  border-color: rgba(111, 143, 245, 0.38);
+  background:
+    linear-gradient(180deg, rgba(111, 143, 245, 0.18), rgba(111, 143, 245, 0.06)),
+    rgba(8, 13, 22, 0.78);
+}
+
+.chart-resize-handle span {
+  width: min(140px, 46%);
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow:
+    0 -5px 0 rgba(210, 222, 242, 0.22),
+    0 5px 0 rgba(210, 222, 242, 0.18);
 }
 
 .chart-textarea::-webkit-scrollbar {

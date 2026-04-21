@@ -71,12 +71,13 @@ interface BuilderState {
 
 const NINTH_QUALITIES = new Set(["9", "M9", "m9", "mM9"]);
 const QUALITY_DROPDOWN_OPTIONS: ReadonlyArray<string | null> = [
-  "Major", "Minor", null, null, null, null,
-  "6", "m6", null, null, null, null,
-  "7", "M7", "m7", "7b5", "M7b5", "m7b5",
-  "9", "M9", "m9", "mM9", null, null,
-  "dim", "dim7", "aug", "blk", null, null,
-  "sus2", "sus4", "omit3", "omit5", null, null,
+  "Major", "Minor", null, null,
+  "6", "m6", null, null,
+  "7", "M7", "m7", null,
+  "7b5", "M7b5", "m7b5", null,
+  "9", "M9", "m9", "mM9",
+  "dim", "dim7", "aug", "blk",
+  "sus2", "sus4", "omit3", "omit5",
 ];
 
 function compareBuilderTensions(left: string, right: string): number {
@@ -148,6 +149,12 @@ interface ExportSettings {
 
 const STORAGE_KEY = "chord-to-midi-generator-pwa";
 const UI_SCALE_STORAGE_KEY = "chord-to-midi-generator-ui-scale";
+const CHART_TEXTAREA_HEIGHT_STORAGE_KEY = "chord-to-midi-generator-chart-textarea-height";
+const BUILDER_PANEL_COLLAPSED_STORAGE_KEY = "chord-to-midi-generator-builder-panel-collapsed";
+const CHART_PANEL_COLLAPSED_STORAGE_KEY = "chord-to-midi-generator-chart-panel-collapsed";
+const CHART_TEXTAREA_MIN_HEIGHT = 180;
+const CHART_TEXTAREA_MAX_HEIGHT = 760;
+const CHART_TEXTAREA_DEFAULT_HEIGHT = 280;
 const CHART_FORMAT_OPTIONS: { value: ChartTextFormat; label: string }[] = [
   { value: "generic", label: "범용" },
   { value: "chordwiki", label: "ChordWiki" },
@@ -177,7 +184,7 @@ const HELP_BASICS = [
 const HELP_FEATURE_DETAILS = [
   "상단의 `알파벳/로마자 전환`으로 코드 표기 방식을 바꿀 수 있습니다.",
   "`보이싱`, `옥타브`, `정리 옵션`으로 MIDI 재생 형태를 조정할 수 있습니다.",
-  "오른쪽 `코드 삽입`에서 선택한 마디에 코드를 빠르게 만들어 넣을 수 있습니다.",
+  "오른쪽 `코드 빌더`에서 선택한 마디에 코드를 빠르게 만들어 넣을 수 있습니다.",
   "모든 코드는 **한 옥타브 낮은 베이스음**과 함께 재생됩니다.",
   "완성된 진행은 `MIDI 저장`, `차트 저장`으로 각각 저장할 수 있습니다.",
 ];
@@ -596,6 +603,32 @@ function ChartTextarea({
   );
 }
 
+function PanelCollapseButton({
+  isCollapsed,
+  onClick,
+  label,
+}: {
+  isCollapsed: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={`button button--ghost button--small panel-collapse-button ${isCollapsed ? "is-collapsed" : ""}`}
+      onClick={onClick}
+      aria-expanded={!isCollapsed}
+      aria-label={`${label} ${isCollapsed ? "펼치기" : "접기"}`}
+      title={`${label} ${isCollapsed ? "펼치기" : "접기"}`}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 10l5 5 5-5z" fill="currentColor" />
+      </svg>
+      {isCollapsed ? "펼치기" : "접기"}
+    </button>
+  );
+}
+
 function KeyDropdown({ value, onChange }: { value: KeyName; onChange: (v: KeyName) => void }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -738,6 +771,7 @@ function GridDropdown({
   onChange,
   title,
   menuMaxWidth,
+  menuClassName,
 }: {
   value: string;
   options: readonly (string | null)[];
@@ -745,6 +779,7 @@ function GridDropdown({
   onChange: (value: string) => void;
   title: string;
   menuMaxWidth?: number;
+  menuClassName?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -781,7 +816,7 @@ function GridDropdown({
 
       {isOpen ? (
         <div
-          className="custom-dropdown__menu custom-dropdown__menu--grid"
+          className={`custom-dropdown__menu custom-dropdown__menu--grid ${menuClassName ?? ""}`}
           style={menuMaxWidth ? ({ maxWidth: `min(calc(100vw - 40px), ${menuMaxWidth}px)` } as CSSProperties) : undefined}
         >
           <div
@@ -984,6 +1019,33 @@ function App() {
   const [pwaInstallState, setPwaInstallState] = useState<PwaInstallState>(INITIAL_PWA_INSTALL_STATE);
   const [isInstallingApp, setIsInstallingApp] = useState(false);
   const [measureAutocomplete, setMeasureAutocomplete] = useState<MeasureAutocompleteState | null>(null);
+  const [isBuilderPanelCollapsed, setIsBuilderPanelCollapsed] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return window.localStorage.getItem(BUILDER_PANEL_COLLAPSED_STORAGE_KEY) === "true";
+  });
+  const [isChartPanelCollapsed, setIsChartPanelCollapsed] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return window.localStorage.getItem(CHART_PANEL_COLLAPSED_STORAGE_KEY) === "true";
+  });
+  const [chartTextareaHeight, setChartTextareaHeight] = useState<number>(() => {
+    if (typeof window === "undefined") {
+      return CHART_TEXTAREA_DEFAULT_HEIGHT;
+    }
+
+    const raw = window.localStorage.getItem(CHART_TEXTAREA_HEIGHT_STORAGE_KEY);
+    const parsed = raw ? Number.parseInt(raw, 10) : CHART_TEXTAREA_DEFAULT_HEIGHT;
+    if (Number.isNaN(parsed)) {
+      return CHART_TEXTAREA_DEFAULT_HEIGHT;
+    }
+
+    return Math.min(CHART_TEXTAREA_MAX_HEIGHT, Math.max(CHART_TEXTAREA_MIN_HEIGHT, parsed));
+  });
   const [manualScale, setManualScale] = useState<number>(() => {
     if (typeof window === "undefined") {
       return 1;
@@ -1044,6 +1106,18 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(UI_SCALE_STORAGE_KEY, String(manualScale));
   }, [manualScale]);
+
+  useEffect(() => {
+    window.localStorage.setItem(CHART_TEXTAREA_HEIGHT_STORAGE_KEY, String(Math.round(chartTextareaHeight)));
+  }, [chartTextareaHeight]);
+
+  useEffect(() => {
+    window.localStorage.setItem(BUILDER_PANEL_COLLAPSED_STORAGE_KEY, String(isBuilderPanelCollapsed));
+  }, [isBuilderPanelCollapsed]);
+
+  useEffect(() => {
+    window.localStorage.setItem(CHART_PANEL_COLLAPSED_STORAGE_KEY, String(isChartPanelCollapsed));
+  }, [isChartPanelCollapsed]);
 
   useEffect(() => {
     if (chartSource === "grid") {
@@ -1726,6 +1800,30 @@ function App() {
     }
   };
 
+  const handleChartResizePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+
+    const startY = event.clientY;
+    const startHeight = chartTextareaHeight;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const nextHeight = startHeight + moveEvent.clientY - startY;
+      setChartTextareaHeight(
+        Math.min(CHART_TEXTAREA_MAX_HEIGHT, Math.max(CHART_TEXTAREA_MIN_HEIGHT, nextHeight)),
+      );
+    };
+
+    const stopResize = () => {
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", stopResize);
+      document.removeEventListener("pointercancel", stopResize);
+    };
+
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", stopResize);
+    document.addEventListener("pointercancel", stopResize);
+  };
+
   const moveSelection = (direction: -1 | 1) => {
     if (!selectedPart || selectedPartIndex < 0) {
       return;
@@ -2375,171 +2473,212 @@ function App() {
 
         <aside className="inspector">
 
-          <section className="panel panel--builder">
-            <div className="panel__header">
+          <section className={`panel panel--builder collapsible-panel ${isBuilderPanelCollapsed ? "is-collapsed" : ""}`}>
+            <div className="panel__header collapsible-panel__header">
               <div>
-                <span className="panel__eyebrow">코드 삽입</span>
+                <span className="panel__eyebrow">코드 빌더</span>
               </div>
-              <span className="surface-chip">Target: #{selectedMeasure.measureIndex + 1}</span>
+              <div className="collapsible-panel__header-actions">
+                {isBuilderPanelCollapsed ? null : (
+                  <span className="surface-chip">Target: #{selectedMeasure.measureIndex + 1}</span>
+                )}
+                <PanelCollapseButton
+                  isCollapsed={isBuilderPanelCollapsed}
+                  label="코드 빌더 메뉴"
+                  onClick={() => setIsBuilderPanelCollapsed((current) => !current)}
+                />
+              </div>
             </div>
 
-            <div className="builder-grid">
-              <label className="field">
-                <span>Root</span>
-                <GridDropdown
-                  value={builder.root}
-                  options={builderRootOptions}
-                  columns={4}
-                  title="루트 선택"
-                  onChange={(value) =>
-                    setBuilder((current) => ({
-                      ...current,
-                      root: value,
-                    }))
-                  }
-                />
-              </label>
-
-              <label className="field">
-                <span>Quality</span>
-                <GridDropdown
-                  value={builder.quality}
-                  options={QUALITY_DROPDOWN_OPTIONS}
-                  columns={6}
-                  title="퀄리티 선택"
-                  menuMaxWidth={380}
-                  onChange={(value) =>
-                    setBuilder((current) => ({
-                      ...current,
-                      quality: value,
-                      tensions: NINTH_QUALITIES.has(value)
-                        ? current.tensions.filter((entry) => entry !== "add9")
-                        : current.tensions,
-                    }))
-                  }
-                />
-              </label>
-            </div>
-
-            <div className="tension-cloud">
-              {TENSIONS_LIST.map((tension) => {
-                const active = builder.tensions.includes(tension);
-                const disabled = tension === "add9" && NINTH_QUALITIES.has(builder.quality);
-                return (
-                  <button
-                    key={tension}
-                    className={`tension-pill ${active ? "is-active" : ""}`}
-                    disabled={disabled}
-                    onClick={() =>
-                      disabled
-                        ? undefined
-                        : setBuilder((current) => ({
+            {isBuilderPanelCollapsed ? null : (
+              <div className="collapsible-panel__body">
+                <div className="builder-grid">
+                  <label className="field">
+                    <span>Root</span>
+                    <GridDropdown
+                      value={builder.root}
+                      options={builderRootOptions}
+                      columns={4}
+                      title="루트 선택"
+                      onChange={(value) =>
+                        setBuilder((current) => ({
                           ...current,
-                          tensions: active
-                            ? current.tensions.filter((entry) => entry !== tension)
-                            : [...current.tensions, tension],
+                          root: value,
                         }))
+                      }
+                    />
+                  </label>
+
+                  <label className="field">
+                    <span>Quality</span>
+                    <GridDropdown
+                      value={builder.quality}
+                      options={QUALITY_DROPDOWN_OPTIONS}
+                      columns={4}
+                      title="퀄리티 선택"
+                      menuMaxWidth={380}
+                      menuClassName="custom-dropdown__menu--quality"
+                      onChange={(value) =>
+                        setBuilder((current) => ({
+                          ...current,
+                          quality: value,
+                          tensions: NINTH_QUALITIES.has(value)
+                            ? current.tensions.filter((entry) => entry !== "add9")
+                            : current.tensions,
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className="tension-cloud">
+                  {TENSIONS_LIST.map((tension) => {
+                    const active = builder.tensions.includes(tension);
+                    const disabled = tension === "add9" && NINTH_QUALITIES.has(builder.quality);
+                    return (
+                      <button
+                        key={tension}
+                        className={`tension-pill ${active ? "is-active" : ""}`}
+                        disabled={disabled}
+                        onClick={() =>
+                          disabled
+                            ? undefined
+                            : setBuilder((current) => ({
+                              ...current,
+                              tensions: active
+                                ? current.tensions.filter((entry) => entry !== tension)
+                                : [...current.tensions, tension],
+                            }))
+                        }
+                      >
+                        {tension === "add9" ? "9" : tension}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="panel__actions">
+                  <button
+                    className="button button--ghost"
+                    onClick={() =>
+                      setBuilder((current) => ({
+                        ...current,
+                        tensions: [],
+                      }))
                     }
                   >
-                    {tension === "add9" ? "9" : tension}
+                    텐션 초기화
                   </button>
-                );
-              })}
-            </div>
-
-            <div className="panel__actions">
-              <button
-                className="button button--ghost"
-                onClick={() =>
-                  setBuilder((current) => ({
-                    ...current,
-                    tensions: [],
-                  }))
-                }
-              >
-                텐션 초기화
-              </button>
-              <button className="button button--primary" onClick={handleInsertChord}>
-                선택 마디에 삽입
-              </button>
-            </div>
+                  <button className="button button--primary" onClick={handleInsertChord}>
+                    선택 마디에 삽입
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
-          <section className="panel">
-            <div className="panel__header panel__header--chart">
+          <section className={`panel panel--chart collapsible-panel ${isChartPanelCollapsed ? "is-collapsed" : ""}`}>
+            <div className="panel__header panel__header--chart collapsible-panel__header">
               <div className="chart-panel__header-main">
                 <div>
                   <span className="panel__eyebrow">텍스트 차트</span>
                 </div>
-                <button className="button button--primary" onClick={handleApplyChart}>
-                  텍스트 적용
-                </button>
-              </div>
-              <div className="panel__actions chart-panel__controls">
-                <div className="segmented" role="tablist" aria-label="텍스트 차트 포맷">
-                  {CHART_FORMAT_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={chartFormat === option.value ? "is-active" : ""}
-                      onClick={() => {
-                        if (option.value === "chordwiki" && chartFormat !== "chordwiki") {
-                          setDialogState({
-                            title: "ChordWiki 실험 기능",
-                            message: "해당 기능은 아직 코드 해석이 불완전한 실험 단계입니다.",
-                            actions: [
-                              {
-                                label: "확인",
-                                variant: "primary",
-                                onClick: () => {
-                                  setDialogState(null);
-                                  setChartFormat(option.value);
-                                  setChartSource("grid");
-                                },
-                              },
-                            ],
-                          });
-                          return;
-                        }
-                        setChartFormat(option.value);
-                        setChartSource("grid");
-                      }}
-                    >
-                      {option.label}
+                <div className="collapsible-panel__header-actions">
+                  {isChartPanelCollapsed ? null : (
+                    <button className="button button--primary" onClick={handleApplyChart}>
+                      텍스트 적용
                     </button>
-                  ))}
-                </div>
-                <label className="toggle-switch">
-                  <input
-                    type="checkbox"
-                    checked={autoFormatChart}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setAutoFormatChart(checked);
-                      if (checked) {
-                        setChartDraft((current) => formatChartText(current));
-                      }
-                    }}
+                  )}
+                  <PanelCollapseButton
+                    isCollapsed={isChartPanelCollapsed}
+                    label="텍스트 차트 메뉴"
+                    onClick={() => setIsChartPanelCollapsed((current) => !current)}
                   />
-                  <span className="toggle-switch__slider"></span>
-                  <span className="toggle-switch__label">자동 줄맞춤</span>
-                </label>
+                </div>
               </div>
+              {isChartPanelCollapsed ? null : (
+                <div className="panel__actions chart-panel__controls">
+                  <div className="segmented" role="tablist" aria-label="텍스트 차트 포맷">
+                    {CHART_FORMAT_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={chartFormat === option.value ? "is-active" : ""}
+                        onClick={() => {
+                          if (option.value === "chordwiki" && chartFormat !== "chordwiki") {
+                            setDialogState({
+                              title: "ChordWiki 실험 기능",
+                              message: "해당 기능은 아직 코드 해석이 불완전한 실험 단계입니다.",
+                              actions: [
+                                {
+                                  label: "확인",
+                                  variant: "primary",
+                                  onClick: () => {
+                                    setDialogState(null);
+                                    setChartFormat(option.value);
+                                    setChartSource("grid");
+                                  },
+                                },
+                              ],
+                            });
+                            return;
+                          }
+                          setChartFormat(option.value);
+                          setChartSource("grid");
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={autoFormatChart}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setAutoFormatChart(checked);
+                        if (checked) {
+                          setChartDraft((current) => formatChartText(current));
+                        }
+                      }}
+                    />
+                    <span className="toggle-switch__slider"></span>
+                    <span className="toggle-switch__label">자동 줄맞춤</span>
+                  </label>
+                </div>
+              )}
             </div>
 
-            <ChartTextarea
-              value={chartDraft}
-              placeholder={chartFormat === "chordwiki" ? CHORDWIKI_PLACEHOLDER : CHART_PLACEHOLDER}
-              onValueChange={(nextValue) => {
-                setChartSource("text");
-                setChartDraft(nextValue);
-              }}
-              onBlur={() => {
-                if (autoFormatChart) {
-                  setChartDraft((current) => formatChartText(current));
-                }
-              }}
-            />
+            {isChartPanelCollapsed ? null : (
+              <div
+                className="collapsible-panel__body chart-resize-shell"
+                style={{ "--chart-textarea-height": `${chartTextareaHeight}px` } as CSSProperties}
+              >
+                <ChartTextarea
+                  value={chartDraft}
+                  placeholder={chartFormat === "chordwiki" ? CHORDWIKI_PLACEHOLDER : CHART_PLACEHOLDER}
+                  onValueChange={(nextValue) => {
+                    setChartSource("text");
+                    setChartDraft(nextValue);
+                  }}
+                  onBlur={() => {
+                    if (autoFormatChart) {
+                      setChartDraft((current) => formatChartText(current));
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="chart-resize-handle"
+                  onPointerDown={handleChartResizePointerDown}
+                  aria-label="텍스트 차트 높이 조절"
+                  title="드래그해서 텍스트 차트 높이 조절"
+                >
+                  <span />
+                </button>
+              </div>
+            )}
           </section>
         </aside>
       </main>
@@ -2672,7 +2811,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-            © TSK · v1.2.8
+            © TSK · v1.3.0
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}
