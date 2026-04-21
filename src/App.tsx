@@ -188,6 +188,12 @@ const HELP_TEXT_RULES = [
   "**%** : 바로 이전 마디 코드를 그대로 반복합니다.",
   "**공백** : 한 마디 안에 여러 코드를 넣을 때 공백으로 구분합니다.",
 ];
+const HELP_SHORTCUTS = [
+  { action: "MIDI 저장", mac: "⌘ S", windows: "Ctrl S" },
+  { action: "차트 저장", mac: "⌘ Shift S", windows: "Ctrl Shift S" },
+  { action: "TXT 불러오기", mac: "⌘ O", windows: "Ctrl O" },
+  { action: "새 차트", mac: "⌘ N", windows: "Ctrl N" },
+];
 const HELP_CHART_EXAMPLE = `[intro] (Key:C)
 | FM7    | G7    | Em7    | Am7   |
 | FM7    | G7    | Am7    | %     |
@@ -776,7 +782,7 @@ function GridDropdown({
       {isOpen ? (
         <div
           className="custom-dropdown__menu custom-dropdown__menu--grid"
-          style={menuMaxWidth ? ({ maxWidth: `${menuMaxWidth}px` } as CSSProperties) : undefined}
+          style={menuMaxWidth ? ({ maxWidth: `min(calc(100vw - 40px), ${menuMaxWidth}px)` } as CSSProperties) : undefined}
         >
           <div
             className="custom-dropdown__grid"
@@ -1555,13 +1561,13 @@ function App() {
     event.target.value = "";
   };
 
-  const handleExportChart = () => {
+  const handleExportChart = useEffectEvent(() => {
     downloadBlob(
       new Blob([serializeChart(parts)], { type: "text/plain;charset=utf-8" }),
       "chord-chart.txt",
     );
     showToast("차트 텍스트를 저장했습니다.");
-  };
+  });
 
   const handleApplyUpdate = useEffectEvent(async () => {
     try {
@@ -1627,7 +1633,7 @@ function App() {
     showToast(pwaInstallState.browserFamily === "chromium" ? INSTALL_FAILURE_MESSAGE : INSTALL_UNSUPPORTED_MESSAGE);
   });
 
-  const handleExportMidi = () => {
+  const handleExportMidi = useEffectEvent(() => {
     try {
       const blob = exportChartToMidi(parts, settings);
       downloadBlob(blob, "chord-progression.mid");
@@ -1636,9 +1642,9 @@ function App() {
       console.error(error);
       showToast("MIDI 생성 중 오류가 발생했습니다.");
     }
-  };
+  });
 
-  const handleClearChart = () => {
+  const handleClearChart = useEffectEvent(() => {
     if (!window.confirm("현재 차트를 새로 시작할까요?")) {
       return;
     }
@@ -1649,7 +1655,44 @@ function App() {
       setChartSource("grid");
       setSelectedMeasure({ partId: nextParts[0].id, measureIndex: 0 });
     });
-  };
+  });
+
+  useEffect(() => {
+    const handleAppShortcut = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      if (event.defaultPrevented || (!event.metaKey && !event.ctrlKey) || event.altKey) {
+        return;
+      }
+
+      if (key === "s" && event.shiftKey) {
+        event.preventDefault();
+        handleExportChart();
+        return;
+      }
+
+      if (key === "s") {
+        event.preventDefault();
+        handleExportMidi();
+        return;
+      }
+
+      if (key === "o") {
+        event.preventDefault();
+        fileInputRef.current?.click();
+        return;
+      }
+
+      if (key === "n") {
+        event.preventDefault();
+        handleClearChart();
+      }
+    };
+
+    window.addEventListener("keydown", handleAppShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleAppShortcut);
+    };
+  }, [handleClearChart, handleExportChart, handleExportMidi]);
 
   const handleInsertChord = () => {
     const targetPart = selectedPart ?? parts[0];
@@ -2364,7 +2407,7 @@ function App() {
                   options={QUALITY_DROPDOWN_OPTIONS}
                   columns={6}
                   title="퀄리티 선택"
-                  menuMaxWidth={460}
+                  menuMaxWidth={380}
                   onChange={(value) =>
                     setBuilder((current) => ({
                       ...current,
@@ -2531,6 +2574,27 @@ function App() {
               </section>
 
               <section className="help-section">
+                <h3>단축키</h3>
+                <ul className="help-list help-shortcuts">
+                  {HELP_SHORTCUTS.map((shortcut) => (
+                    <li key={shortcut.action}>
+                      <span>{shortcut.action}</span>
+                      <span>
+                        <kbd>{shortcut.windows}</kbd>
+                        <span aria-hidden="true"> / </span>
+                        <kbd>{shortcut.mac}</kbd>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p>
+                  {renderHighlightedText(
+                    "`Ctrl N` / `⌘ N` 은 브라우저, OS, 설치형 웹앱 실행 환경에 따라 앱보다 먼저 처리되어 작동하지 않을 수 있습니다.",
+                  )}
+                </p>
+              </section>
+
+              <section className="help-section">
                 <h3>기본 사용법</h3>
                 <ul className="help-list">
                   {HELP_BASICS.map((item) => (
@@ -2568,6 +2632,7 @@ function App() {
                   <code>{HELP_CHART_EXAMPLE}</code>
                 </pre>
               </section>
+
             </div>
           </div>
         </div>
@@ -2607,7 +2672,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-        © TSK · v1.2.7
+            © TSK · v1.2.8
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}
