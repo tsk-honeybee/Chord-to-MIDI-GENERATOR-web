@@ -330,9 +330,10 @@ export function parseChordSymbol(text: string, key: string): ParsedChord {
   }
 
   symbol = symbol
-    .replace(/maj7/gi, "M7")
-    .replace(/Maj7/gi, "M7")
-    .replace(/maj/gi, "M")
+    .replace(/major([b#]?(?:7|9|11|13))/gi, "M$1")
+    .replace(/maj([b#]?(?:7|9|11|13))/gi, "M$1")
+    .replace(/major/gi, "")
+    .replace(/maj/gi, "")
     .replace(/min6/g, "m6")
     .replace(/min/g, "m")
     .replace(/ø/g, "m7b5")

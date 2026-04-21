@@ -37,7 +37,7 @@ const CHORDWIKI_DIRECTIVE_PATTERN = /^\[\{\s*(?<name>[a-z_]+)\s*:\s*(?<value>.*?
 const CHORDWIKI_KEY_LINE_PATTERN = /^Key\s*:\s*(.+)$/i;
 const CHORDWIKI_PLACEHOLDER_PATTERN = /^[>\-.\s~]+$/;
 const CHORDWIKI_CHORD_PATTERN =
-  /([A-Ga-g](?:#|b)?(?:m7-5|add\d+|aug7|aug|dim7|dim|m7b5|maj7|M7|m13|m11|m9|m7|m6|sus2|sus4|sus|m|[0-9+#b-]*)?(?:\([^)]*\))?(?:\/[A-Ga-g](?:#|b)?)?)/g;
+  /([A-Ga-g](?:#|b)?(?:m7-5|add\d+|aug7|aug|dim7|dim|m7b5|maj(?:7b5|7|9|11|13)?|M(?:7b5|7|9|11|13)|m13|m11|m9|m7|m6|sus2|sus4|sus|m|[0-9+#b-]*)?(?:\([^)]*\))?(?:\/[A-Ga-g](?:#|b)?)?)/g;
 
 function createId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {

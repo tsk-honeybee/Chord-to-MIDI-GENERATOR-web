@@ -26,6 +26,10 @@ interface NavigatorWithRelatedApps extends Navigator {
   }>>;
 }
 
+interface NavigatorWithStandalone extends Navigator {
+  standalone?: boolean;
+}
+
 export interface PwaInstallState {
   canInstall: boolean;
   isInstalled: boolean;
@@ -59,7 +63,10 @@ function isStandaloneMode() {
     return false;
   }
 
-  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as NavigatorWithStandalone).standalone === true
+  );
 }
 
 function isSafariBrowser() {
@@ -205,11 +212,7 @@ export function initializePwaRegistration() {
     syncInstallState();
   };
 
-  if ("addEventListener" in displayModeQuery) {
-    displayModeQuery.addEventListener("change", handleDisplayModeChange);
-  } else {
-    displayModeQuery.addListener(handleDisplayModeChange);
-  }
+  displayModeQuery.addEventListener("change", handleDisplayModeChange);
 
   syncInstallState();
   void probeInstalledRelatedApps();

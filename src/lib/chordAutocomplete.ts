@@ -33,9 +33,21 @@ const BASE_CHORD_OPTIONS = [
   { suffix: "M7", detail: "M7" },
   { suffix: "m7", detail: "m7" },
   { suffix: "mM7", detail: "mM7" },
+  { suffix: "m9", detail: "m9" },
+  { suffix: "mM9", detail: "mM9" },
+  { suffix: "m7b5", detail: "m7b5" },
+  { suffix: "maj", detail: "Major" },
+  { suffix: "maj7", detail: "M7" },
+  { suffix: "maj9", detail: "M9" },
+  { suffix: "maj11", detail: "M11" },
+  { suffix: "maj13", detail: "M13" },
+  { suffix: "maj7b5", detail: "M7b5" },
   { suffix: "7b5", detail: "7b5" },
   { suffix: "M7b5", detail: "M7b5" },
-  { suffix: "m7b5", detail: "m7b5" },
+  { suffix: "9", detail: "9" },
+  { suffix: "M9", detail: "M9" },
+  { suffix: "M11", detail: "M11" },
+  { suffix: "M13", detail: "M13" },
   { suffix: "dim", detail: "dim" },
   { suffix: "dim7", detail: "dim7" },
   { suffix: "aug", detail: "aug" },
@@ -170,7 +182,13 @@ function buildBaseSuggestions(
 
   for (const root of matchingRoots) {
     const suffixQuery = token.slice(root.length);
-    const suggestions = BASE_CHORD_OPTIONS.filter((option) => option.suffix.startsWith(suffixQuery)).map((option) => ({
+    const suggestions = BASE_CHORD_OPTIONS.filter((option) => {
+      if (!suffixQuery && option.suffix.startsWith("maj")) {
+        return false;
+      }
+
+      return option.suffix.startsWith(suffixQuery);
+    }).map((option) => ({
       value: `${root}${option.suffix}`,
       label: `${root}${option.suffix}`,
       detail: option.detail,
