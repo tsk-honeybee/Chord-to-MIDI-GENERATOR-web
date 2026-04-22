@@ -3,6 +3,7 @@ import type { ChartPart } from "./chart";
 import {
   buildVoicing,
   durationTicksForN,
+  isRestToken,
   parseChordSymbol,
   splitMeasureText,
   type VoicingStyle,
@@ -31,12 +32,11 @@ export function exportChartToMidi(parts: ChartPart[], settings: MidiExportSettin
 
   let currentTick = 0;
   let lastResolvedChord: string | null = null;
-  let lastTopNote: number | null = null;
 
   parts.forEach((part) => {
     part.measures.forEach((measure) => {
       const text = measure.trim();
-      if (text.toLowerCase() === "x") {
+      if (isRestToken(text)) {
         currentTick += 4 * midi.header.ppq;
         return;
       }
@@ -47,6 +47,11 @@ export function exportChartToMidi(parts: ChartPart[], settings: MidiExportSettin
       }
 
       const chordTokens = splitMeasureText(text);
+      if (chordTokens.length === 0) {
+        currentTick += 4 * midi.header.ppq;
+        return;
+      }
+
       const durations = durationTicksForN(chordTokens.length, midi.header.ppq);
 
       chordTokens.forEach((token, index) => {
@@ -56,7 +61,7 @@ export function exportChartToMidi(parts: ChartPart[], settings: MidiExportSettin
           return;
         }
 
-        if (resolved === ".") {
+        if (isRestToken(resolved)) {
           currentTick += durations[index];
           return;
         }
@@ -65,14 +70,8 @@ export function exportChartToMidi(parts: ChartPart[], settings: MidiExportSettin
           const parsed = parseChordSymbol(resolved, part.key);
           const notes = buildVoicing(parsed, {
             ...settings,
-            lastTopNote,
           });
           const exportedNotes = notes.map((midiNote) => midiNote + 12);
-
-          if (exportedNotes.length > 1) {
-            const chordNotes = exportedNotes.slice(1);
-            lastTopNote = Math.max(...chordNotes);
-          }
 
           exportedNotes.forEach((midiNote) => {
             track.addNote({

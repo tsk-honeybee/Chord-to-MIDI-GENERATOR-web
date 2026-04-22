@@ -1,4 +1,4 @@
-import { getNoteNamesForKey, romanDegreesForKey, type KeyName, type NotationMode } from "./chord";
+import { getNoteNamesForKey, romanRootOptionsForKey, type KeyName, type NotationMode } from "./chord";
 
 const COMMON_ALPHA_ROOTS = [
   "C",
@@ -33,6 +33,7 @@ const BASE_CHORD_OPTIONS = [
   { suffix: "M7", detail: "M7" },
   { suffix: "m7", detail: "m7" },
   { suffix: "mM7", detail: "mM7" },
+  { suffix: "mM7b5", detail: "mM7b5" },
   { suffix: "m9", detail: "m9" },
   { suffix: "mM9", detail: "mM9" },
   { suffix: "m7b5", detail: "m7b5" },
@@ -44,6 +45,10 @@ const BASE_CHORD_OPTIONS = [
   { suffix: "maj7b5", detail: "M7b5" },
   { suffix: "7b5", detail: "7b5" },
   { suffix: "M7b5", detail: "M7b5" },
+  { suffix: "9b5", detail: "9b5" },
+  { suffix: "M9b5", detail: "M9b5" },
+  { suffix: "m9b5", detail: "m9b5" },
+  { suffix: "mM9b5", detail: "mM9b5" },
   { suffix: "9", detail: "9" },
   { suffix: "M9", detail: "M9" },
   { suffix: "M11", detail: "M11" },
@@ -90,14 +95,10 @@ function uniqueCaseInsensitive(values: readonly string[]): string[] {
 
 function getRootOptions(mode: NotationMode, key: KeyName): string[] {
   if (mode === "degree") {
-    return romanDegreesForKey(key);
+    return romanRootOptionsForKey(key);
   }
 
   return uniqueCaseInsensitive([...getNoteNamesForKey(key), ...COMMON_ALPHA_ROOTS]);
-}
-
-function stripTensionNumber(value: string): string {
-  return value.replaceAll(/\D/g, "");
 }
 
 function getTokenBounds(value: string, caret: number) {
@@ -151,14 +152,14 @@ function buildTensionSuggestions(token: string, caretOffset: number): ChordAutoc
       .filter((_, index) => index !== currentSegmentIndex)
       .map((segment) => segment.trim())
       .filter(Boolean)
-      .map(stripTensionNumber),
+      .map((segment) => segment.toLowerCase()),
   );
 
   const beforeSegment = inner.slice(0, segmentStart);
   const afterSegment = inner.slice(segmentStart + currentSegment.length);
 
   const suggestions = TENSION_OPTIONS.filter(
-    (option) => option.toLowerCase().startsWith(queryLower) && !usedTensions.has(stripTensionNumber(option)),
+    (option) => option.toLowerCase().startsWith(queryLower) && !usedTensions.has(option.toLowerCase()),
   ).map((option) => ({
     value: `${token.slice(0, openIndex + 1)}${beforeSegment}${option}${afterSegment}${closeIndex >= 0 ? token.slice(closeIndex) : ")"}`,
     label: option,

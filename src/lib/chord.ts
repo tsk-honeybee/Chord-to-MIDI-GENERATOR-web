@@ -34,6 +34,7 @@ export const QUALITY_SYMBOLS = [
   "7",
   "9",
   "M7",
+  "mM7",
   "M9",
   "m7",
   "m9",
@@ -41,6 +42,11 @@ export const QUALITY_SYMBOLS = [
   "7b5",
   "M7b5",
   "m7b5",
+  "mM7b5",
+  "9b5",
+  "M9b5",
+  "m9b5",
+  "mM9b5",
   "dim",
   "dim7",
   "aug",
@@ -95,7 +101,8 @@ const KEY_SPECIFIC_NAMES: Partial<Record<KeyName, Record<number, string>>> = {
   Abm: { 4: "Fb" },
 };
 const ROMAN_PATTERN = "(?:VII|VI|V|IV|III|II|I)";
-const ROMAN_RE = new RegExp(`^([b#]?)(${ROMAN_PATTERN})$`, "i");
+const ROMAN_ACCIDENTAL_PATTERN = "(?:bb|##|b|#)?";
+const ROMAN_RE = new RegExp(`^(${ROMAN_ACCIDENTAL_PATTERN})(${ROMAN_PATTERN})$`, "i");
 const TENSION_MAP: Record<string, number> = {
   "6": 9,
   b6: 8,
@@ -107,6 +114,26 @@ const TENSION_MAP: Record<string, number> = {
   "13": 21,
   b13: 20,
 };
+const LETTER_NAMES = ["C", "D", "E", "F", "G", "A", "B"] as const;
+const NATURAL_LETTER_PCS: Record<string, number> = {
+  C: 0,
+  D: 2,
+  E: 4,
+  F: 5,
+  G: 7,
+  A: 9,
+  B: 11,
+};
+const ROMAN_DEGREE_INDEX: Record<string, number> = {
+  I: 0,
+  II: 1,
+  III: 2,
+  IV: 3,
+  V: 4,
+  VI: 5,
+  VII: 6,
+};
+const ROMAN_DEGREES = ["I", "II", "III", "IV", "V", "VI", "VII"] as const;
 
 export function prefersSharps(key: string): boolean {
   return KEY_PREFERS_SHARPS[key as KeyName] ?? true;
@@ -129,53 +156,27 @@ export function getNoteNamesForKey(key: string): string[] {
 }
 
 export function nameToPc(name: string): number {
-  const table: Record<string, number> = {
-    C: 0,
-    "B#": 0,
-    Dbb: 0,
-    "C#": 1,
-    Db: 1,
-    D: 2,
-    "C##": 2,
-    Ebb: 2,
-    "D#": 3,
-    Eb: 3,
-    E: 4,
-    Fb: 4,
-    "D##": 4,
-    F: 5,
-    "E#": 5,
-    Gbb: 5,
-    "F#": 6,
-    Gb: 6,
-    "E##": 6,
-    G: 7,
-    "F##": 7,
-    Abb: 7,
-    "G#": 8,
-    Ab: 8,
-    A: 9,
-    "G##": 9,
-    Bbb: 9,
-    "A#": 10,
-    Bb: 10,
-    Cbb: 10,
-    B: 11,
-    Cb: 11,
-    "A##": 11,
-  };
-
   const trimmed = name.trim();
-  const normalized =
-    trimmed.length > 1 && ["b", "#"].includes(trimmed[1])
-      ? `${trimmed[0].toUpperCase()}${trimmed.slice(1)}`
-      : `${trimmed[0].toUpperCase()}${trimmed.slice(1).toLowerCase()}`;
+  const normalized = normalizeNoteSpelling(trimmed);
+  const match = normalized.match(/^([A-G])((?:bb|##|b|#)?)$/);
 
-  if (!(normalized in table)) {
+  if (!match) {
     throw new Error(`Unknown note name: ${normalized}`);
   }
 
-  return table[normalized];
+  const naturalPc = NATURAL_LETTER_PCS[match[1]];
+  const accidentalOffset = Array.from(match[2]).reduce((offset, accidental) => {
+    if (accidental === "#") {
+      return offset + 1;
+    }
+    if (accidental === "b") {
+      return offset - 1;
+    }
+
+    return offset;
+  }, 0);
+
+  return (naturalPc + accidentalOffset + 12) % 12;
 }
 
 export function pcToName(pc: number, useSharps: boolean, key?: string): string {
@@ -192,6 +193,11 @@ export function midiToDisplayName(midi: number, key?: string): string {
   const pitchClass = ((midi % 12) + 12) % 12;
   const octave = Math.floor(midi / 12) - 1;
   return `${pcToName(pitchClass, prefersSharps(key ?? "C"), key)}${octave}`;
+}
+
+export function isRestToken(text: string): boolean {
+  const token = text.trim();
+  return /^x$/i.test(token) || /^n\.?c\.?$/i.test(token);
 }
 
 export function parseTensions(text: string): string[] {
@@ -220,34 +226,153 @@ export function parseTensions(text: string): string[] {
   const output: string[] = [];
 
   for (const tension of normalized) {
-    const coreNumber = tension.replaceAll(/\D/g, "");
-    if (!seen.has(coreNumber)) {
+    if (!seen.has(tension)) {
       output.push(tension);
-      seen.add(coreNumber);
+      seen.add(tension);
     }
   }
 
   return output;
 }
 
-export function romanToPcOffset(key: string, builderRoot: string): number {
-    const romanMatch = builderRoot.match(ROMAN_RE);
-    const accidental = romanMatch![1] || "";
-    const romanNumeral = romanMatch![2].toUpperCase();
+function romanToPcOffsetFromTonic(tonicPc: number, isMinorKey: boolean, builderRoot: string): number {
+  const romanMatch = builderRoot.match(ROMAN_RE);
+  if (!romanMatch) {
+    throw new Error(`Unrecognized roman degree: ${builderRoot}`);
+  }
 
-    const isMinorKey = key.endsWith("m");
-    const degreeMap = isMinorKey ? MINOR_DEGREE_TO_SEMITONES : MAJOR_DEGREE_TO_SEMITONES;
-    const baseDegreeSemitones = degreeMap[romanNumeral];
-    
-    let semitoneOffset = baseDegreeSemitones;
-    if (accidental === "b") {
+  const accidental = (romanMatch[1] || "").replace(/b/gi, "b");
+  const romanNumeral = romanMatch[2].toUpperCase();
+  const degreeMap = isMinorKey ? MINOR_DEGREE_TO_SEMITONES : MAJOR_DEGREE_TO_SEMITONES;
+  const baseDegreeSemitones = degreeMap[romanNumeral];
+
+  let semitoneOffset = baseDegreeSemitones;
+  for (const accidentalChar of accidental) {
+    if (accidentalChar === "b") {
       semitoneOffset -= 1;
-    } else if (accidental === "#") {
+    } else if (accidentalChar === "#") {
       semitoneOffset += 1;
     }
+  }
 
-    const keyRootPc = nameToPc(key.replace("m", ""));
-    return (keyRootPc + semitoneOffset + 12) % 12;
+  return (tonicPc + semitoneOffset + 12) % 12;
+}
+
+export function romanToPcOffset(key: string, builderRoot: string): number {
+  return romanToPcOffsetFromTonic(nameToPc(keyRootName(key)), key.endsWith("m"), builderRoot);
+}
+
+function normalizeRomanSymbol(symbol: string): string {
+  const romanMatch = symbol.match(ROMAN_RE);
+  if (!romanMatch) {
+    return symbol;
+  }
+
+  const accidental = (romanMatch[1] ?? "").replace(/b/gi, "b");
+  return `${accidental}${romanMatch[2].toUpperCase()}`;
+}
+
+function romanPrefersSharps(symbol: string, key: string): boolean {
+  if (symbol.startsWith("b")) {
+    return false;
+  }
+  if (symbol.startsWith("#")) {
+    return true;
+  }
+
+  return prefersSharps(key);
+}
+
+function keyRootName(key: string): string {
+  return key.endsWith("m") ? key.slice(0, -1) : key;
+}
+
+function normalizeNoteSpelling(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  const letter = trimmed[0].toUpperCase();
+  const accidental = trimmed.slice(1).replace(/b/gi, "b");
+  return `${letter}${accidental}`;
+}
+
+function accidentalText(delta: number): string | null {
+  if (delta === 0) {
+    return "";
+  }
+  if (delta === 1) {
+    return "#";
+  }
+  if (delta === 2) {
+    return "##";
+  }
+  if (delta === -1) {
+    return "b";
+  }
+  if (delta === -2) {
+    return "bb";
+  }
+
+  return null;
+}
+
+function pcToRomanDegreeSpelling(key: string, symbol: string): string {
+  const romanMatch = symbol.match(ROMAN_RE);
+  if (!romanMatch) {
+    return pcToName(romanToPcOffset(key, symbol), romanPrefersSharps(symbol, key), key);
+  }
+
+  const tonicLetter = keyRootName(key)[0].toUpperCase();
+  const tonicLetterIndex = LETTER_NAMES.indexOf(tonicLetter as typeof LETTER_NAMES[number]);
+  const degreeIndex = ROMAN_DEGREE_INDEX[romanMatch[2].toUpperCase()];
+  const targetLetter = LETTER_NAMES[(tonicLetterIndex + degreeIndex) % LETTER_NAMES.length];
+  const naturalPc = NATURAL_LETTER_PCS[targetLetter];
+  const targetPc = romanToPcOffset(key, symbol);
+  let delta = (targetPc - naturalPc + 12) % 12;
+  if (delta > 6) {
+    delta -= 12;
+  }
+
+  const accidental = accidentalText(delta);
+  return accidental === null ? pcToName(targetPc, romanPrefersSharps(symbol, key), key) : `${targetLetter}${accidental}`;
+}
+
+function noteNameToRomanDegree(key: string, noteName: string): string | null {
+  const normalizedNote = normalizeNoteSpelling(noteName);
+  const noteLetterIndex = LETTER_NAMES.indexOf(normalizedNote[0] as typeof LETTER_NAMES[number]);
+  const tonicLetterIndex = LETTER_NAMES.indexOf(keyRootName(key)[0].toUpperCase() as typeof LETTER_NAMES[number]);
+
+  if (noteLetterIndex < 0 || tonicLetterIndex < 0) {
+    return null;
+  }
+
+  const romanDegree = ROMAN_DEGREES[(noteLetterIndex - tonicLetterIndex + LETTER_NAMES.length) % LETTER_NAMES.length];
+  const notePc = nameToPc(normalizedNote);
+  const degreePc = romanToPcOffset(key, romanDegree);
+  let delta = (notePc - degreePc + 12) % 12;
+  if (delta > 6) {
+    delta -= 12;
+  }
+
+  const accidental = accidentalText(delta);
+  return accidental === null ? null : `${accidental}${romanDegree}`;
+}
+
+export function romanRootOptionsForKey(key: string): string[] {
+  const seen = new Set<string>();
+  return NOTE_NAMES_SHARP.flatMap((sharpName, index) => [sharpName, NOTE_NAMES_FLAT[index]])
+    .map((noteName) => noteNameToRomanDegree(key, noteName))
+    .filter((degree): degree is string => Boolean(degree))
+    .filter((degree) => {
+      if (seen.has(degree)) {
+        return false;
+      }
+
+      seen.add(degree);
+      return true;
+    });
 }
 
 export function parseChordSymbol(text: string, key: string): ParsedChord {
@@ -298,9 +423,9 @@ export function parseChordSymbol(text: string, key: string): ParsedChord {
     bassNoteStr = bass.trim();
 
     try {
-      bassNote = pcToName(nameToPc(bassNoteStr), prefersSharps(key), key);
+      bassNote = normalizeNoteSpelling(bassNoteStr);
+      nameToPc(bassNote);
     } catch {
-      bassNoteStr = null;
       bassNote = null;
     }
   }
@@ -355,12 +480,12 @@ export function parseChordSymbol(text: string, key: string): ParsedChord {
   let root: string;
   let rootPc: number;
 
-  const romanMatch = symbol.match(new RegExp(`^([b#]?${ROMAN_PATTERN})`, "i"));
+  const romanMatch = symbol.match(new RegExp(`^(${ROMAN_ACCIDENTAL_PATTERN}${ROMAN_PATTERN})`, "i"));
   if (romanMatch) {
     head = romanMatch[1];
     rest = symbol.slice(head.length).trim();
     isRoman = true;
-    root = pcToName(romanToPcOffset(key, head), prefersSharps(key), key);
+    root = pcToRomanDegreeSpelling(key, head);
     rootPc = nameToPc(root);
   } else {
     const alphaMatch = symbol.match(/^([A-G](?:##|bb|#|b)?)/i);
@@ -370,7 +495,7 @@ export function parseChordSymbol(text: string, key: string): ParsedChord {
 
     head = alphaMatch[1];
     rest = symbol.slice(head.length).trim();
-    root = `${head[0].toUpperCase()}${head.slice(1)}`;
+    root = normalizeNoteSpelling(head);
     rootPc = nameToPc(root);
   }
 
@@ -378,13 +503,16 @@ export function parseChordSymbol(text: string, key: string): ParsedChord {
   let bassDegree: string | null = null;
   if (bassNoteStr && isRoman) {
     if (ROMAN_RE.test(bassNoteStr)) {
-      bassDegree = bassNoteStr;
+      bassDegree = normalizeRomanSymbol(bassNoteStr);
+      bassNote = pcToRomanDegreeSpelling(key, bassDegree);
+      bassNoteStr = null;
     } else {
       try {
-        const bassNotePc = nameToPc(bassNoteStr);
+        const normalizedBassNote = normalizeNoteSpelling(bassNoteStr);
+        const bassNotePc = nameToPc(normalizedBassNote);
         bassDegree = buildStringFromParsed(
           {
-            root: bassNoteStr,
+            root: normalizedBassNote,
             rootPc: bassNotePc,
             quality: "Major",
             tensions: [],
@@ -410,11 +538,48 @@ export function parseChordSymbol(text: string, key: string): ParsedChord {
     }
   }
 
+  if (bassNoteStr && !isRoman) {
+    if (bassNote) {
+      const bassNotePc = nameToPc(bassNote);
+      bassDegree = buildStringFromParsed(
+        {
+          root: bassNote,
+          rootPc: bassNotePc,
+          quality: "Major",
+          tensions: [],
+          parenContents: [],
+          bassNoteStr: null,
+          bassNote: null,
+          bassDegree: null,
+          bassInterval: null,
+          omissions: [],
+          isRoman: false,
+          romanSymbol: null,
+          seventh: null,
+          alterations: [],
+        },
+        true,
+        key,
+      );
+    } else {
+      bassNoteStr = null;
+    }
+  }
+
   let quality = "Major";
   let seventh: string | null = null;
   const tensions: string[] = [];
   const alterations: string[] = [];
   let mutableRest = rest;
+
+  const addTensionMatches = [...mutableRest.matchAll(/add([b#]?(?:2|4|6|9|11|13))/gi)];
+  addTensionMatches.forEach((match) => {
+    const normalizedTension = match[1].replace("2", "9").replace("4", "11");
+    if (!parenContents.includes(normalizedTension)) {
+      parenContents.push(normalizedTension);
+    }
+    mutableRest = mutableRest.replace(match[0], "");
+  });
 
   const majorTensionMatch = mutableRest.match(/M([b#]?(?:9|11|13))/);
   if (majorTensionMatch) {
@@ -455,10 +620,16 @@ export function parseChordSymbol(text: string, key: string): ParsedChord {
   } else if (mutableRest.includes("sus2")) {
     quality = "sus2";
     mutableRest = mutableRest.replace("sus2", "");
+  } else if (mutableRest.includes("sus")) {
+    quality = "sus4";
+    mutableRest = mutableRest.replace("sus", "");
   } else if (mutableRest.includes("m6")) {
     quality = "Minor";
     tensions.push("6");
     mutableRest = mutableRest.replace("m6", "");
+  } else if (mutableRest.replace(/[b#]5/g, "").includes("5")) {
+    quality = "power";
+    mutableRest = mutableRest.replace("5", "");
   } else if (mutableRest.includes("aug") || mutableRest.includes("+")) {
     quality = "aug";
     mutableRest = mutableRest.replace("aug", "").replace("+", "");
@@ -468,18 +639,6 @@ export function parseChordSymbol(text: string, key: string): ParsedChord {
   } else if (mutableRest.includes("m")) {
     quality = "Minor";
     mutableRest = mutableRest.replace("m", "");
-  }
-
-  if (isRoman && head === head.toLowerCase()) {
-    if (["I", "II", "III", "IV", "V", "VI"].includes(head.toUpperCase())) {
-      if (quality === "Major") {
-        quality = "Minor";
-      }
-    } else if (head.toUpperCase() === "VII") {
-      if (quality === "Major") {
-        quality = "dim";
-      }
-    }
   }
 
   if (mutableRest.includes("b5")) {
@@ -507,7 +666,7 @@ export function parseChordSymbol(text: string, key: string): ParsedChord {
     bassInterval,
     omissions,
     isRoman,
-    romanSymbol: head,
+    romanSymbol: normalizeRomanSymbol(head),
     seventh,
     alterations,
   };
@@ -518,31 +677,9 @@ export function buildStringFromParsed(parsed: ParsedChord, asRoman: boolean, key
 
   if (asRoman) {
     if (parsed.isRoman && parsed.romanSymbol) {
-      base = parsed.romanSymbol;
+      base = normalizeRomanSymbol(parsed.romanSymbol);
     } else {
-      const isMinorKey = key.endsWith("m");
-      const rootPc = parsed.rootPc;
-      const keyRootPc = nameToPc(key.replace("m", ""));
-      const intervalFromKey = (rootPc - keyRootPc + 12) % 12;
-
-      let romanRoot = "";
-      if (isMinorKey) {
-        const minorMap: Record<number, string> = {
-          0: "I", 1: "bII", 2: "II", 3: "III", 4: "#III", 5: "IV", 6: "bV", 7: "V", 8: "VI", 9: "#VI", 10: "VII", 11: "#VII"
-        };
-        romanRoot = minorMap[intervalFromKey];
-      } else {
-        const majorMap: Record<number, string> = {
-          0: "I", 1: "bII", 2: "II", 3: "bIII", 4: "III", 5: "IV", 6: "bV", 7: "V", 8: "bVI", 9: "VI", 10: "bVII", 11: "VII"
-        };
-        romanRoot = majorMap[intervalFromKey];
-      }
-
-      if (parsed.quality === "Minor" || parsed.quality === "dim" || parsed.quality === "m7b5") {
-        romanRoot = romanRoot.toLowerCase();
-      }
-      
-      base = romanRoot;
+      base = noteNameToRomanDegree(key, parsed.root) ?? romanDegreesForKey(key)[parsed.rootPc];
     }
   }
 
@@ -556,6 +693,8 @@ export function buildStringFromParsed(parsed: ParsedChord, asRoman: boolean, key
     coreQuality = "aug";
   } else if (parsed.quality === "blk") {
     coreQuality = "blk";
+  } else if (parsed.quality === "power") {
+    coreQuality = "5";
   } else if (parsed.quality === "sus2") {
     susText = "sus2";
   } else if (parsed.quality === "sus4") {
@@ -603,14 +742,15 @@ export function buildStringFromParsed(parsed: ParsedChord, asRoman: boolean, key
 
   let bassDisplay: string | null = null;
   if (asRoman && parsed.bassDegree) {
-    const bassPc = romanToPcOffset(key, parsed.bassDegree);
-    bassDisplay = pcToName(bassPc, prefersSharps(key), key);
+    bassDisplay = normalizeRomanSymbol(parsed.bassDegree);
   } else if (parsed.bassNoteStr !== null) {
     bassDisplay = parsed.bassNoteStr;
+  } else if (!asRoman && parsed.bassNote !== null) {
+    bassDisplay = parsed.bassNote;
   }
 
   const showBass = Boolean(
-    bassDisplay && (parsed.bassNoteStr !== null || bassDisplay !== parsed.root),
+    bassDisplay && (asRoman || nameToPc(bassDisplay) !== parsed.rootPc),
   );
   const bassText = showBass ? `/${bassDisplay}` : "";
 
@@ -624,7 +764,6 @@ export function buildVoicing(
     omitDuplicatedBass: boolean;
     voicingStyle: VoicingStyle;
     voicingOctaveShift: number;
-    lastTopNote?: number | null;
   },
 ): number[] {
   const { omit5OnConflict, omitDuplicatedBass, voicingStyle, voicingOctaveShift } = options;
@@ -637,7 +776,9 @@ export function buildVoicing(
   } else {
     const allTensions = [...parsed.tensions, ...parsed.parenContents];
 
-    if (parsed.quality === "Minor") {
+    if (parsed.quality === "power") {
+      intervals.push(0, 7);
+    } else if (parsed.quality === "Minor") {
       intervals.push(0, 3, 7);
     } else if (parsed.quality === "dim") {
       intervals.push(0, 3, 6);
@@ -835,6 +976,10 @@ export function splitMeasureText(text: string): string[] {
   const pushToken = (rawToken: string) => {
     const token = rawToken.trim();
     if (!token) {
+      return;
+    }
+
+    if (token === ".") {
       return;
     }
 

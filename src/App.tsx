@@ -31,9 +31,10 @@ import {
   buildVoicing,
   convertMeasureText,
   getNoteNamesForKey,
+  isRestToken,
   midiToDisplayName,
   parseChordSymbol,
-  romanDegreesForKey,
+  romanRootOptionsForKey,
   splitMeasureText,
   type KeyName,
   type NotationMode,
@@ -69,13 +70,14 @@ interface BuilderState {
   tensions: string[];
 }
 
-const NINTH_QUALITIES = new Set(["9", "M9", "m9", "mM9"]);
+const NINTH_QUALITIES = new Set(["9", "M9", "m9", "mM9", "9b5", "M9b5", "m9b5", "mM9b5"]);
 const QUALITY_DROPDOWN_OPTIONS: ReadonlyArray<string | null> = [
   "Major", "Minor", null, null,
   "6", "m6", null, null,
-  "7", "M7", "m7", null,
-  "7b5", "M7b5", "m7b5", null,
+  "7", "M7", "m7", "mM7",
+  "7b5", "M7b5", "m7b5", "mM7b5",
   "9", "M9", "m9", "mM9",
+  "9b5", "M9b5", "m9b5", "mM9b5",
   "dim", "dim7", "aug", "blk",
   "sus2", "sus4", "omit3", "omit5",
 ];
@@ -285,7 +287,7 @@ function resolveChordToken(
     for (let measureIndex = 0; measureIndex < part.measures.length; measureIndex += 1) {
       const measureText = part.measures[measureIndex].trim();
 
-      if (!measureText || measureText.toLowerCase() === "x") {
+      if (!measureText || isRestToken(measureText)) {
         if (part.id === target.partId && measureIndex === target.measureIndex) {
           return null;
         }
@@ -305,7 +307,7 @@ function resolveChordToken(
           return resolvedChord;
         }
 
-        if (resolvedChord) {
+        if (resolvedChord && !isRestToken(resolvedChord)) {
           lastResolvedChord = resolvedChord;
         }
       }
@@ -349,11 +351,21 @@ function buildPreviewRow(
     };
   }
 
+  if (isRestToken(resolvedToken)) {
+    return {
+      id: rowId,
+      label: token,
+      detail: "쉼표입니다.",
+      notes: [],
+      midiNotes: [],
+      status: "muted",
+    };
+  }
+
   try {
     const parsed = parseChordSymbol(resolvedToken, selectedKey);
     const voicing = buildVoicing(parsed, {
       ...settings,
-      lastTopNote: null,
     });
     const renderedSymbol = buildStringFromParsed(parsed, mode === "degree", selectedKey);
 
@@ -1202,7 +1214,7 @@ function App() {
   const selectedPartIndex = selectedPart ? parts.findIndex((part) => part.id === selectedPart.id) : -1;
   const selectedKey = selectedPart?.key ?? "C";
   const selectedMeasureText = selectedPart?.measures[selectedMeasure.measureIndex] ?? "";
-  const builderRootOptions = mode === "degree" ? romanDegreesForKey(selectedKey) : getNoteNamesForKey(selectedKey);
+  const builderRootOptions = mode === "degree" ? romanRootOptionsForKey(selectedKey) : getNoteNamesForKey(selectedKey);
   const deferredUpdateReady = useDeferredValue(isUpdateReady);
 
   useEffect(() => {
@@ -1470,7 +1482,7 @@ function App() {
               measures: entry.measures.map((measure) =>
                 splitMeasureText(measure)
                   .map((token) => {
-                    if (token === "%") {
+                    if (token === "%" || isRestToken(token)) {
                       return token;
                     }
 
@@ -2265,7 +2277,7 @@ function App() {
                         <label
                           key={`${part.id}-${measureIndex}`}
                           className={`measure-card ${isSelected ? "is-selected" : ""} ${settings.previewEnabled ? "measure-card--preview" : ""
-                            } ${measure.trim().toLowerCase() === "x" ? "is-muted" : ""
+                            } ${isRestToken(measure.trim()) ? "is-muted" : ""
                             }`}
                           onClick={() => setSelectedMeasure({ partId: part.id, measureIndex })}
                         >
@@ -2811,7 +2823,7 @@ function App() {
       ) : null}
 
       <div className="app-version" aria-label="앱 버전">
-            © TSK · v1.3.1
+            © TSK · v1.3.2
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}
